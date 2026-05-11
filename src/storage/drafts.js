@@ -7,9 +7,9 @@ export async function insertDraft(env, draft) {
   }
 
   await env.DB.prepare(
-    "insert into drafts (id, topic, text, status, source, created_at) values (?, ?, ?, ?, ?, ?)"
+    "insert into drafts (id, topic, text, status, source, created_at, target) values (?, ?, ?, ?, ?, ?, ?)"
   )
-    .bind(draft.id, draft.topic, draft.text, draft.status, draft.source, draft.createdAt)
+    .bind(draft.id, draft.topic, draft.text, draft.status, draft.source, draft.createdAt, draft.target || "all")
     .run();
 }
 
@@ -53,6 +53,7 @@ function fromRow(row) {
     text: row.text,
     status: row.status,
     source: row.source,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    target: row.target || "all"
   };
 }

@@ -8,6 +8,16 @@ export default {
       return Response.json({ ok: true, bot: env.BOT_NAME || "telegram-worker-bot" });
     }
 
+    if (request.method === "GET" && url.pathname === "/linkedin/auth") {
+      const { handleLinkedInAuth } = await import("./oauth/linkedin.js");
+      return handleLinkedInAuth(request, env);
+    }
+
+    if (request.method === "GET" && url.pathname === "/linkedin/callback") {
+      const { handleLinkedInCallback } = await import("./oauth/linkedin.js");
+      return handleLinkedInCallback(request, env);
+    }
+
     if (request.method === "POST" && url.pathname === "/telegram/webhook") {
       return handleTelegramWebhook(request, env, ctx);
     }

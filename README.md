@@ -100,6 +100,8 @@ Facebook sources are stored as disabled candidates until they are manually revie
 ```text
 /status
 /draft <topic>
+/personal-draft <topic>
+/company-draft <topic>
 /pending
 /approve <draft_id>
 /reject <draft_id>

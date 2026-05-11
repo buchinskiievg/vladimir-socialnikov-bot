@@ -7,6 +7,7 @@ export async function createDraftFromTopic(topic, context) {
     topic,
     text: await generateDraftText(topic, context.env),
     status: "pending",
+    target: context.target || "all",
     source: "telegram",
     createdAt: new Date().toISOString()
   };
@@ -24,7 +25,7 @@ export async function approveDraft(id, context) {
   if (!draft) return { ok: false, message: `Draft ${id} not found.` };
   if (draft.status !== "pending") return { ok: false, message: `Draft ${id} is ${draft.status}.` };
 
-  const publishResult = await publishToSocials({ text: draft.text }, context.env);
+  const publishResult = await publishToSocials({ text: draft.text, target: draft.target || "all" }, context.env);
   await updateDraftStatus(context.env, id, publishResult.ok ? "published" : "publish_failed");
 
   const lines = [`Draft ${id}: ${publishResult.ok ? "published" : "publish failed"}`];
@@ -49,6 +50,7 @@ export async function createDraftFromFinding(finding, env) {
     topic,
     text: await generateDraftText(topic, env, finding),
     status: "pending",
+    target: finding.target || "all",
     source: finding.url || "monitoring",
     createdAt: new Date().toISOString()
   };

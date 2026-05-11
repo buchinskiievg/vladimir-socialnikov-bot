@@ -14,8 +14,9 @@ const CONNECTORS = [
 
 export async function publishToSocials(post, env) {
   const results = [];
+  const connectors = filterConnectors(CONNECTORS, post.target || "all");
 
-  for (const connector of CONNECTORS) {
+  for (const connector of connectors) {
     try {
       const item = await connector.publish(post, env);
       results.push({ network: connector.name, ...item });
@@ -25,4 +26,11 @@ export async function publishToSocials(post, env) {
   }
 
   return { ok: results.every((item) => item.ok), results };
+}
+
+function filterConnectors(connectors, target) {
+  if (target === "linkedin_personal" || target === "linkedin_company") {
+    return connectors.filter((connector) => connector.name === "LinkedIn");
+  }
+  return connectors;
 }

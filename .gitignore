@@ -2,3 +2,5 @@ node_modules/
 .wrangler/
 .dev.vars
 *.log
+LOCAL_SECRETS_DO_NOT_COMMIT.txt
+*_SECRETS_DO_NOT_COMMIT.txt
