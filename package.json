@@ -1,0 +1,15 @@
+{
+  "name": "social-telegram-worker-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "set-webhook": "node scripts/set-webhook.js",
+    "delete-webhook": "node scripts/delete-webhook.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.14.4"
+  }
+}

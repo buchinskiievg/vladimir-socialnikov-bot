@@ -1,0 +1,26 @@
+name = "vladimir-socialnikov-bot"
+main = "src/index.js"
+compatibility_date = "2026-05-11"
+
+[triggers]
+crons = ["0 */6 * * *", "0 4 * * *"]
+
+[vars]
+BOT_NAME = "vladimir_socialnikov_bot"
+ALLOWED_TELEGRAM_USER_IDS = "5284518943"
+TELEGRAM_REPORT_CHAT_ID = "5284518943"
+SOCIAL_DRY_RUN = "true"
+META_GRAPH_API_VERSION = "v24.0"
+OPENAI_TEXT_MODEL = "gpt-4.1-mini"
+GEMINI_TEXT_MODEL = "gemini-2.5-flash-lite"
+MAX_DRAFTS_PER_MONITORING_RUN = "3"
+REDDIT_USER_AGENT = "social-telegram-worker-bot/0.1"
+SOURCE_SCANNER_USER_AGENT = "social-telegram-worker-bot/0.1 (+https://workers.cloudflare.com)"
+ENRICH_THREADS = "true"
+MAX_COMMENTS_PER_THREAD = "12"
+MAX_HTML_THREAD_CHARS = "12000"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vladimir-socialnikov-bot-db"
+database_id = "2aff985f-a0c2-41d2-8c53-1997037529fa"

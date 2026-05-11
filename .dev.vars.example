@@ -1,0 +1,35 @@
+TELEGRAM_BOT_TOKEN=123456789:replace_me
+WEBHOOK_SECRET=replace_with_random_long_string
+PUBLIC_WORKER_URL=https://social-telegram-worker-bot.your-subdomain.workers.dev
+
+# Comma-separated Telegram user IDs allowed to control the bot.
+ALLOWED_TELEGRAM_USER_IDS=123456789
+TELEGRAM_REPORT_CHAT_ID=123456789
+
+# Keep true until real social APIs are connected.
+SOCIAL_DRY_RUN=true
+META_GRAPH_API_VERSION=v24.0
+
+# Future social credentials, stored as Cloudflare secrets in production.
+LINKEDIN_ACCESS_TOKEN=
+LINKEDIN_ORGANIZATION_URN=
+FACEBOOK_PAGE_ACCESS_TOKEN=
+FACEBOOK_PAGE_ID=
+INSTAGRAM_ACCESS_TOKEN=
+INSTAGRAM_BUSINESS_ACCOUNT_ID=
+REDDIT_CLIENT_ID=
+REDDIT_CLIENT_SECRET=
+REDDIT_REFRESH_TOKEN=
+REDDIT_SUBREDDIT=
+REDDIT_USER_AGENT=social-telegram-worker-bot/0.1
+SOURCE_SCANNER_USER_AGENT=social-telegram-worker-bot/0.1 (+https://workers.cloudflare.com)
+ENRICH_THREADS=true
+MAX_COMMENTS_PER_THREAD=12
+MAX_HTML_THREAD_CHARS=12000
+THREADS_ACCESS_TOKEN=
+THREADS_USER_ID=
+OPENAI_API_KEY=
+OPENAI_TEXT_MODEL=gpt-4.1-mini
+GEMINI_API_KEY=
+GEMINI_TEXT_MODEL=gemini-2.5-flash-lite
+MAX_DRAFTS_PER_MONITORING_RUN=3
