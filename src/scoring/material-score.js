@@ -14,6 +14,8 @@ export async function scoreMaterial(item, source, env) {
   const freshnessScore = scoreFreshness(item.publishedAt);
   const leadScore = scoreLeadPotential(lower);
   const softwareScore = scoreSoftwareInterest(lower, platform);
+  const gridBuildScore = scoreGridBuildInterest(lower);
+  const oemScore = scoreOemEquipmentInterest(lower);
 
   const total = Math.round(
     topicScore * 0.25 +
@@ -22,7 +24,9 @@ export async function scoreMaterial(item, source, env) {
     materialScore * 0.14 +
     freshnessScore * 0.11 +
     leadScore * 0.10 +
-    softwareScore * 0.10
+    softwareScore * 0.10 +
+    gridBuildScore * 0.16 +
+    oemScore * 0.14
   );
 
   return {
@@ -35,7 +39,9 @@ export async function scoreMaterial(item, source, env) {
       material: materialScore,
       freshness: freshnessScore,
       lead: leadScore,
-      software: softwareScore
+      software: softwareScore,
+      gridBuild: gridBuildScore,
+      oem: oemScore
     },
     matchedTopics: matchTopics(lower, topics).slice(0, 3)
   };
@@ -149,6 +155,73 @@ function scoreImportance(text, sourceType) {
     ["safety", 16],
     ["arc flash", 20]
   ]));
+}
+
+function scoreGridBuildInterest(text) {
+  return cappedScore(text, [
+    ["330 kv", 20],
+    ["345 kv", 20],
+    ["400 kv", 18],
+    ["500 kv", 24],
+    ["550 kv", 24],
+    ["735 kv", 24],
+    ["750 kv", 28],
+    ["765 kv", 30],
+    ["800 kv", 30],
+    ["1100 kv", 30],
+    ["±500", 22],
+    ["±800", 28],
+    ["hvdc", 26],
+    ["uhv", 26],
+    ["ehv", 18],
+    ["transmission line", 18],
+    ["grid expansion", 20],
+    ["substation construction", 22],
+    ["converter station", 22],
+    ["gis", 14],
+    ["gas-insulated switchgear", 22],
+    ["breaker-and-a-half", 18],
+    ["500/230", 22],
+    ["500/115", 20],
+    ["765-kv", 30],
+    ["500-kv", 24],
+    ["750-kv", 28],
+    ["major transmission", 18],
+    ["large power transformer", 18],
+    ["transformer bank", 18]
+  ]);
+}
+
+function scoreOemEquipmentInterest(text) {
+  return cappedScore(text, [
+    ["abb", 18],
+    ["siemens", 18],
+    ["siemens energy", 24],
+    ["hitachi", 18],
+    ["hitachi energy", 26],
+    ["alstom", 14],
+    ["alstom grid", 18],
+    ["ge vernova", 22],
+    ["ge grid", 18],
+    ["schneider electric", 20],
+    ["econiQ".toLowerCase(), 24],
+    ["sf6-free", 26],
+    ["sf₆-free", 26],
+    ["sf6 free", 26],
+    ["circuit breaker", 16],
+    ["dead tank", 16],
+    ["gas-insulated", 18],
+    ["digital substation", 20],
+    ["protection relay", 16],
+    ["transformer factory", 20],
+    ["switchgear manufacturing", 20],
+    ["grid equipment", 18],
+    ["equipment order", 14],
+    ["new product", 12],
+    ["unveiled", 12],
+    ["commissioned", 16],
+    ["energized", 16]
+  ]);
 }
 
 function scorePopularity(text) {

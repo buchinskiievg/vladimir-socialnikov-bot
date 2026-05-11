@@ -205,6 +205,7 @@ export async function generateDemandTopics({ findings }, env) {
               "Find post topics that users currently care about in electrical power engineering.",
               "Return only valid compact JSON.",
               "Prefer practical pain points: questions, repeated confusion, design choices, calculations, standards, tools, failures.",
+              "Also prioritize major grid construction and OEM equipment news: 330-750 kV substations, EHV/UHV/HVDC lines, transformers, GIS, breakers, SF6-free gear, digital substations, and announcements from ABB, Siemens Energy, Hitachi Energy, GE Vernova, Schneider Electric, Alstom Grid, and similar brands.",
               "Do not invent demand that is not supported by the findings."
             ].join(" ")
           }]

@@ -9,7 +9,11 @@ export const PLATFORM_TOPICS = {
     "electrical engineering software workflows and study automation",
     "ETAP, DIgSILENT PowerFactory, SKM, EasyPower, CYME, PSS/E, PVsyst, HelioScope professional workflows",
     "software-assisted studies: load flow, short circuit, arc flash, protection coordination, power quality",
-    "engineering calculator workflows that reduce manual study errors"
+    "engineering calculator workflows that reduce manual study errors",
+    "major 330-750 kV substations, transmission lines, and grid expansion projects",
+    "HVDC and UHV transmission projects, converter stations, and long-distance power transfer",
+    "new high-voltage equipment from Hitachi Energy, Siemens Energy, ABB, GE Vernova, Schneider Electric, and other OEMs",
+    "SF6-free GIS, EHV circuit breakers, transformers, digital substations, and protection equipment"
   ],
   reddit: [
     "how-to questions from electrical engineers",
@@ -51,6 +55,8 @@ export const PLATFORM_TOPICS = {
     "detailed troubleshooting and design questions",
     "regional solar PV installation and grid connection problems",
     "substation, transformer, switchgear, grounding, and protection cases",
+    "330-750 kV transmission, substation construction, HVDC, GIS, transformers, and EHV equipment",
+    "high-voltage OEM equipment news from Hitachi Energy, Siemens Energy, ABB, GE Vernova, Schneider Electric, and Alstom Grid",
     "standards and calculation interpretation questions",
     "equipment failures, harmonics, resonance, and power quality",
     "requests for design software, calculators, and consultant help"

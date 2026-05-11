@@ -90,6 +90,8 @@ function demandReasonFromScore(finding) {
     `importance ${components.importance}`,
     `popularity ${components.popularity}`,
     `material ${components.material}`,
-    `freshness ${components.freshness}`
-  ].join("; ");
+    `freshness ${components.freshness}`,
+    components.gridBuild ? `grid build ${components.gridBuild}` : "",
+    components.oem ? `OEM/equipment ${components.oem}` : ""
+  ].filter(Boolean).join("; ");
 }
