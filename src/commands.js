@@ -5,6 +5,12 @@ import { listLeadsByStatus } from "./storage/leads.js";
 import { buildDailyReport } from "./reports/daily.js";
 import { handleDialogue } from "./dialogue.js";
 import { resetDialogue } from "./dialogue.js";
+import {
+  listTopicPreferences,
+  seedDefaultTopicPreferences,
+  setTopicStatus,
+  upsertTopicPreference
+} from "./storage/topic-preferences.js";
 
 export async function routeCommand(text, context) {
   const trimmed = text.trim();
@@ -28,6 +34,7 @@ export async function routeCommand(text, context) {
       "/leads - list new leads",
       "/report - daily monitoring report",
       "/memory - check dialogue memory storage",
+      "/topics - show proposed/active topic strategy",
       "/test-publish - dry-run check all configured publishing connectors",
       "/post <text> - draft/publish to connected social networks",
       "",
@@ -97,6 +104,11 @@ export async function routeCommand(text, context) {
       `Slow archive (R2): ${context.env.MESSAGE_ARCHIVE ? "connected" : "not connected"}`,
       "Retention target: 180 days"
     ].join("\n");
+  }
+
+  if (firstLine === "/topics") {
+    await seedDefaultTopicPreferences(context.env, "proposed");
+    return formatTopicPreferences(await listTopicPreferences(context.env));
   }
 
   if (firstLine === "/test-publish") {
@@ -224,6 +236,9 @@ function formatLeadBrief(lead) {
 }
 
 async function handleNaturalLanguage(message, context) {
+  const topicManagement = await handleTopicManagement(message, context.env);
+  if (topicManagement) return topicManagement;
+
   if (context.message?.chat?.id) {
     const dialogueResponse = await handleDialogue(context.message, context);
     if (dialogueResponse === "/status") return buildStatus(context.env);
@@ -277,6 +292,57 @@ async function handleNaturalLanguage(message, context) {
   }
 
   return "Не понял задачу. Можешь написать обычным языком: что подготовить, для какой соцсети и на какую тему.";
+}
+
+async function handleTopicManagement(message, env) {
+  const lower = message.toLowerCase();
+  if (lower.includes("покажи темы") || lower.includes("список тем") || lower.includes("topics")) {
+    await seedDefaultTopicPreferences(env, "proposed");
+    return formatTopicPreferences(await listTopicPreferences(env));
+  }
+
+  if (lower.includes("утверди темы") || lower.includes("согласуй темы") || lower.includes("approve topics")) {
+    const rows = await seedDefaultTopicPreferences(env, "proposed");
+    for (const row of rows) await setTopicStatus(env, row.id, "active");
+    return "Темы утверждены. Теперь scoring будет использовать их как active-профили площадок.";
+  }
+
+  const addMatch = message.match(/(?:добавь|добавить|add)\s+тему\s+(.+?)\s+(?:для|в)\s+(linkedin|reddit|facebook|instagram|threads|forums|форум(?:ы)?)/i);
+  if (addMatch) {
+    const row = await upsertTopicPreference(env, {
+      platform: addMatch[2],
+      topic: addMatch[1],
+      status: "active",
+      weight: 1
+    });
+    return `Добавил тему ${row.id} для ${row.platform}: ${row.topic}`;
+  }
+
+  const disableMatch = message.match(/(?:убери|отключи|disable|remove)\s+тему\s+([a-z0-9-]+)/i);
+  if (disableMatch) {
+    await setTopicStatus(env, disableMatch[1], "disabled");
+    return `Отключил тему ${disableMatch[1]}.`;
+  }
+
+  return null;
+}
+
+function formatTopicPreferences(rows) {
+  const grouped = new Map();
+  for (const row of rows) {
+    if (!grouped.has(row.platform)) grouped.set(row.platform, []);
+    grouped.get(row.platform).push(row);
+  }
+
+  const lines = ["Topic strategy by platform:"];
+  for (const [platform, items] of grouped.entries()) {
+    lines.push("", platform.toUpperCase());
+    for (const item of items) {
+      lines.push(`${item.id} [${item.status}, weight ${item.weight}]: ${item.topic}`);
+    }
+  }
+  lines.push("", "Можно написать: утверди темы; добавь тему arc flash для LinkedIn; отключи тему linkedin-3.");
+  return lines.join("\n").slice(0, 3900);
 }
 
 async function parseIntent(message, env) {

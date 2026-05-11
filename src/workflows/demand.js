@@ -7,7 +7,7 @@ export async function createDraftsFromDemand(findings, env) {
   const topics = await findDemandTopics(findings, env);
   const drafts = [];
 
-  for (const item of topics.slice(0, maxDrafts)) {
+  for (const item of topics.sort((a, b) => Number(b.score || 0) - Number(a.score || 0)).slice(0, maxDrafts)) {
     const target = normalizeTarget(item.target);
     const topic = buildTopic(item);
     drafts.push(await createDraftFromTopic(topic, { env, target }));
@@ -45,7 +45,8 @@ function normalizeTopics(topics) {
       angle: String(item.angle || "").trim(),
       demandReason: String(item.demandReason || "").trim(),
       target: normalizeTarget(item.target),
-      evidenceUrls: Array.isArray(item.evidenceUrls) ? item.evidenceUrls.filter(Boolean).slice(0, 3) : []
+      evidenceUrls: Array.isArray(item.evidenceUrls) ? item.evidenceUrls.filter(Boolean).slice(0, 3) : [],
+      score: Number(item.score || 0)
     });
   }
 
@@ -60,9 +61,10 @@ function fallbackTopics(findings) {
     .map((finding) => ({
       topic: finding.title || finding.topic || "Practical electrical engineering discussion",
       angle: "Answer the practical question behind this discussion.",
-      demandReason: "This topic appeared in monitored sources and matched engineering intent.",
+      demandReason: demandReasonFromScore(finding),
       target: "linkedin_personal",
-      evidenceUrls: [finding.url].filter(Boolean)
+      evidenceUrls: [finding.url].filter(Boolean),
+      score: finding.score || 0
     }));
 }
 
@@ -77,4 +79,17 @@ function buildTopic(item) {
 
 function normalizeTarget(target) {
   return ["linkedin_personal", "linkedin_company", "all"].includes(target) ? target : "linkedin_personal";
+}
+
+function demandReasonFromScore(finding) {
+  const components = finding.scoring?.components;
+  if (!components) return "This topic appeared in monitored sources and matched engineering intent.";
+  return [
+    `material score ${finding.score}`,
+    `topic ${components.topic}`,
+    `importance ${components.importance}`,
+    `popularity ${components.popularity}`,
+    `material ${components.material}`,
+    `freshness ${components.freshness}`
+  ].join("; ");
 }

@@ -187,6 +187,8 @@ export async function generateDemandTopics({ findings }, env) {
     excerpt: String(finding.excerpt || finding.fullText || "").slice(0, 900),
     url: finding.url || "",
     score: finding.score || 0,
+    scoring: finding.scoring?.components || {},
+    platform: finding.platform || "",
     sourceTopic: finding.topic || ""
   }));
 
@@ -217,7 +219,8 @@ export async function generateDemandTopics({ findings }, env) {
                   angle: "string",
                   demandReason: "string",
                   target: "linkedin_personal or linkedin_company",
-                  evidenceUrls: ["string"]
+                  evidenceUrls: ["string"],
+                  score: 0
                 }]
               },
               findings: compactFindings

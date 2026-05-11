@@ -12,6 +12,7 @@ import {
   pruneExpiredFindingSentences,
   rememberFindingSentence
 } from "../storage/finding-memory.js";
+import { scoreLeadPotential, scoreMaterial } from "../scoring/material-score.js";
 
 export async function runMonitoringCycle(env, event) {
   const startedAt = new Date().toISOString();
@@ -45,8 +46,10 @@ export async function runMonitoringCycle(env, event) {
           ? await enrichItem(rawItem, source, env)
           : rawItem;
         if (item.fullText || item.commentsText) stats.itemsEnriched += 1;
-        const score = scoreItem(item, source.topic);
-        if (score >= 2) {
+        const scoring = await scoreMaterial(item, source, env);
+        const keywordScore = scoreItem(item, source.topic);
+        const score = scoring.total;
+        if (score >= Number(env.MIN_MATERIAL_SCORE || 45) || keywordScore >= 2) {
           const sentence = firstSentenceFromItem(item);
           const normalizedKey = normalizeSentence(sentence);
           if (await hasFindingSentence(env, normalizedKey)) continue;
@@ -57,10 +60,18 @@ export async function runMonitoringCycle(env, event) {
             firstSeenAt: startedAt
           });
           stats.findingsFound += 1;
-          findings.push({ ...item, score, topic: source.topic, sourceId: source.id });
+          findings.push({
+            ...item,
+            score,
+            keywordScore,
+            scoring,
+            topic: source.topic,
+            sourceId: source.id,
+            platform: scoring.platform
+          });
         }
 
-        if (score >= 3 && looksLikeLead(item)) {
+        if (score >= Number(env.MIN_LEAD_SCORE || 65) && looksLikeLead(item)) {
           await insertLead(env, {
             sourceId: source.id,
             sourceUrl: item.url || source.url,
@@ -192,16 +203,7 @@ function scoreItem(item, topic) {
 
 function looksLikeLead(item) {
   const text = `${item.title || ""} ${item.excerpt || ""} ${item.fullText || ""}`.toLowerCase();
-  return [
-    "recommend",
-    "looking for",
-    "need help",
-    "how to calculate",
-    "consultant",
-    "software",
-    "tool",
-    "design"
-  ].some((marker) => text.includes(marker));
+  return scoreLeadPotential(text) >= 20;
 }
 
 function shouldEnrich(item, source, env) {
