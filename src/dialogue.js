@@ -24,7 +24,7 @@ export async function handleDialogue(message, context) {
   const turn = await parseDialogueTurn({ message: text, fastMemory, recentMessages }, env);
   const response = await executeDialogueTurn(turn, { ...context, message, fastMemory });
 
-  const assistantMessage = { chatId, userId: "bot", role: "assistant", text: response.text || response, createdAt: new Date().toISOString() };
+  const assistantMessage = { chatId, userId: "bot", role: "assistant", text: responseToMemoryText(response), createdAt: new Date().toISOString() };
   await appendChatMessage(env, assistantMessage);
   await archiveMessageToSlowMemory(env, assistantMessage);
 
@@ -123,4 +123,16 @@ function formatDrafts(drafts) {
       }))
     ]
   };
+}
+
+function responseToMemoryText(response) {
+  if (typeof response === "string") return response;
+  if (response?.text) return String(response.text);
+  if (Array.isArray(response?.messages)) {
+    return response.messages
+      .map((message) => typeof message === "string" ? message : message?.text || "")
+      .filter(Boolean)
+      .join("\n\n");
+  }
+  return JSON.stringify(response || "");
 }
