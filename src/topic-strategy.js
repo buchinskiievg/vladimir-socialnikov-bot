@@ -5,7 +5,11 @@ export const PLATFORM_TOPICS = {
     "capacitor bank sizing and reactive power compensation",
     "short-circuit, load flow, and protection coordination workflows",
     "solar PV grid connection and utility requirements",
-    "engineering calculators and repeatable design checks"
+    "engineering calculators and repeatable design checks",
+    "electrical engineering software workflows and study automation",
+    "ETAP, DIgSILENT PowerFactory, SKM, EasyPower, CYME, PSS/E, PVsyst, HelioScope professional workflows",
+    "software-assisted studies: load flow, short circuit, arc flash, protection coordination, power quality",
+    "engineering calculator workflows that reduce manual study errors"
   ],
   reddit: [
     "how-to questions from electrical engineers",

@@ -70,7 +70,7 @@ export function scoreLeadPotential(text) {
 }
 
 function scoreSoftwareInterest(text, platform) {
-  const base = platform === "facebook" ? 12 : 0;
+  const base = platform === "facebook" ? 12 : platform === "linkedin" ? 10 : 0;
   return Math.min(100, base + cappedScore(text, [
     ["etap", 28],
     ["digSilent".toLowerCase(), 26],
