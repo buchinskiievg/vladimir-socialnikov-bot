@@ -98,19 +98,29 @@ function normalizeTargets(targets) {
 }
 
 function formatDrafts(drafts) {
-  const lines = [`Готово: подготовил ${drafts.length} черновик(а).`];
-  for (const draft of drafts) {
-    lines.push(
-      "",
-      `Draft ${draft.id}`,
-      `Topic: ${draft.topic}`,
-      `Target: ${draft.target || "all"}`,
-      "",
-      draft.text,
-      "",
-      `Approve: /approve ${draft.id}`,
-      `Reject: /reject ${draft.id}`
-    );
-  }
-  return lines.join("\n");
+  return {
+    messages: [
+      `Готово: подготовил ${drafts.length} черновик(а).`,
+      ...drafts.map((draft) => ({
+        text: [
+          `Draft ${draft.id}`,
+          `Topic: ${draft.topic}`,
+          `Target: ${draft.target || "all"}`,
+          "",
+          draft.text,
+          "",
+          `Approve: /approve ${draft.id}`,
+          `Reject: /reject ${draft.id}`
+        ].join("\n"),
+        options: {
+          reply_markup: {
+            inline_keyboard: [[
+              { text: "Approve", callback_data: `approve:${draft.id}` },
+              { text: "Reject", callback_data: `reject:${draft.id}` }
+            ]]
+          }
+        }
+      }))
+    ]
+  };
 }

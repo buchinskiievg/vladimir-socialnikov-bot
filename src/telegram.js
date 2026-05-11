@@ -27,7 +27,10 @@ export async function handleTelegramWebhook(request, env, ctx) {
 
   const text = message.text || "";
   const reply = await routeCommand(text, { env, update, message });
-  await sendTelegramMessage(env, message.chat.id, reply.text || reply, reply.options || {});
+  const replies = Array.isArray(reply?.messages) ? reply.messages : [reply];
+  for (const item of replies) {
+    await sendTelegramMessage(env, message.chat.id, item.text || item, item.options || {});
+  }
 
   return Response.json({ ok: true });
 }
