@@ -1,5 +1,5 @@
 import { parseDialogueTurn } from "./ai/gemini.js";
-import { createDraftFromTopic } from "./workflows/drafts.js";
+import { createDraftFromTopic, listPendingDrafts, reviseDraft } from "./workflows/drafts.js";
 import {
   appendChatMessage,
   archiveMessageToSlowMemory,
@@ -24,6 +24,14 @@ export async function handleDialogue(message, context) {
   const recentMessages = await listRecentMessages(env, chatId, 16);
   const newDraftRequest = startsNewDraftRequest(text);
   const explicitTopic = extractExplicitTopic(text);
+
+  if (!newDraftRequest && looksLikeDraftRevision(text)) {
+    const response = await handleDraftRevision(text, { ...context, fastMemory, chatId });
+    const assistantMessage = { chatId, userId: "bot", role: "assistant", text: responseToMemoryText(response), createdAt: new Date().toISOString() };
+    await appendChatMessage(env, assistantMessage);
+    await archiveMessageToSlowMemory(env, assistantMessage);
+    return response;
+  }
 
   if (newDraftRequest && !explicitTopic) {
     const targets = inferTargets(text);
@@ -81,7 +89,7 @@ async function executeDialogueTurn(turn, context) {
     for (const target of targets) {
       drafts.push(await createDraftFromTopic(topic, { ...context, target }));
     }
-    await clearPending(env, fastMemory, chatId);
+    await rememberDrafts(env, fastMemory, chatId, drafts);
     return formatDrafts(drafts);
   }
 
@@ -92,7 +100,7 @@ async function executeDialogueTurn(turn, context) {
     for (const target of targets) {
       drafts.push(await createDraftFromTopic(topic, { ...context, target }));
     }
-    await clearPending(env, fastMemory, chatId);
+    await rememberDrafts(env, fastMemory, chatId, drafts);
     return formatDrafts(drafts);
   }
 
@@ -113,6 +121,121 @@ async function clearPending(env, fastMemory, chatId) {
     pendingTargets: [],
     pendingTopicHint: ""
   });
+}
+
+async function rememberDrafts(env, fastMemory, chatId, drafts) {
+  const existingSummary = readSummary(fastMemory);
+  const recentDraftIds = drafts.map((draft) => draft.id);
+  const recentDraftTargets = drafts.map((draft) => draft.target || "all");
+  await writeFastMemory(env, {
+    ...fastMemory,
+    chatId,
+    updatedAt: new Date().toISOString(),
+    pendingIntent: "",
+    pendingTargets: [],
+    pendingTopicHint: "",
+    summary: JSON.stringify({
+      ...existingSummary,
+      recentDraftIds,
+      recentDraftTargets,
+      recentDraftTopic: drafts[0]?.topic || ""
+    })
+  });
+}
+
+async function handleDraftRevision(text, context) {
+  const env = context.env;
+  const fastMemory = context.fastMemory;
+  const summary = readSummary(fastMemory);
+  const topicChange = extractChangedTopic(text);
+
+  if (topicChange) {
+    const targets = normalizeTargets(summary.recentDraftTargets || ["all"]);
+    const drafts = [];
+    for (const target of targets) {
+      drafts.push(await createDraftFromTopic(topicChange, { ...context, target }));
+    }
+    await rememberDrafts(env, fastMemory, context.chatId, drafts);
+    return formatDrafts(drafts);
+  }
+
+  const ids = extractDraftIds(text);
+  const targetIds = ids.length ? ids : await inferDraftIdsForRevision(env, text, summary);
+  if (!targetIds.length) {
+    return "Понял правку, но не вижу черновика. Напиши, например: перепиши последний черновик короче.";
+  }
+
+  const updated = [];
+  for (const id of targetIds) {
+    const result = await reviseDraft(id, text, { env });
+    if (result.ok && result.draft) updated.push(result.draft);
+  }
+
+  if (!updated.length) return "Не смог найти подходящий pending-черновик для правки.";
+  await rememberDrafts(env, fastMemory, context.chatId, updated);
+  return formatDrafts(updated);
+}
+
+async function inferDraftIdsForRevision(env, text, summary) {
+  const recentIds = Array.isArray(summary.recentDraftIds) ? summary.recentDraftIds.filter(Boolean) : [];
+  const lower = String(text || "").toLowerCase();
+  if (recentIds.length && (lower.includes("оба") || lower.includes("все") || lower.includes("их") || lower.includes("both") || lower.includes("all"))) {
+    return recentIds.slice(0, 4);
+  }
+  if (recentIds.length) return [recentIds[0]];
+
+  const pending = await listPendingDrafts(env);
+  if (!pending.length) return [];
+  if (lower.includes("оба") || lower.includes("все") || lower.includes("их") || lower.includes("both") || lower.includes("all")) {
+    return pending.slice(0, 4).map((draft) => draft.id);
+  }
+  return [pending[0].id];
+}
+
+function looksLikeDraftRevision(text) {
+  const lower = String(text || "").toLowerCase();
+  return [
+    "перепиши",
+    "переделай",
+    "измени",
+    "сделай короче",
+    "укороти",
+    "длиннее",
+    "подробнее",
+    "техничес",
+    "без маркет",
+    "меньше продаж",
+    "смени тему",
+    "замени тему",
+    "переведи",
+    "translate",
+    "rewrite",
+    "revise",
+    "shorter",
+    "more technical",
+    "less sales"
+  ].some((marker) => lower.includes(marker));
+}
+
+function extractDraftIds(text) {
+  const ids = [];
+  const matches = String(text || "").matchAll(/\b(?:draft|черновик)?\s*([a-f0-9]{8})\b/gi);
+  for (const match of matches) ids.push(match[1]);
+  return [...new Set(ids)];
+}
+
+function extractChangedTopic(text) {
+  const match = String(text || "").match(/(?:смени|замени|поменяй)\s+тему\s+(?:на|про|о)\s+(.+)$/i);
+  const topic = match?.[1]?.trim() || "";
+  return topic.length >= 8 ? topic : "";
+}
+
+function readSummary(fastMemory) {
+  try {
+    return JSON.parse(fastMemory?.summary || "{}");
+  } catch {
+    return {};
+  }
 }
 
 function normalizeTargets(targets) {
@@ -139,15 +262,29 @@ function formatDrafts(drafts) {
         ].join("\n"),
         options: {
           reply_markup: {
-            inline_keyboard: [[
-              { text: "Approve", callback_data: `approve:${draft.id}` },
-              { text: "Reject", callback_data: `reject:${draft.id}` }
-            ]]
+            inline_keyboard: draftButtons(draft.id)
           }
         }
       }))
     ]
   };
+}
+
+function draftButtons(id) {
+  return [
+    [
+      { text: "Approve", callback_data: `approve:${id}` },
+      { text: "Reject", callback_data: `reject:${id}` }
+    ],
+    [
+      { text: "Shorter", callback_data: `revise_short:${id}` },
+      { text: "More technical", callback_data: `revise_tech:${id}` }
+    ],
+    [
+      { text: "Less salesy", callback_data: `revise_nosales:${id}` },
+      { text: "Regenerate", callback_data: `revise_regen:${id}` }
+    ]
+  ];
 }
 
 function responseToMemoryText(response) {

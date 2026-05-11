@@ -120,6 +120,128 @@ export async function parseNaturalIntent(message, env) {
   return JSON.parse(text || "{}");
 }
 
+export async function revisePostDraft({ draft, instruction }, env) {
+  const model = env.GEMINI_TEXT_MODEL || "gemini-2.5-flash-lite";
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{
+            text: [
+              "You revise professional LinkedIn posts for electrical power engineers.",
+              "Return exactly one complete ready-to-publish revised post.",
+              "Do not explain changes. Do not include options or headings.",
+              "Preserve the user's requested direction and keep the post technically credible."
+            ].join(" ")
+          }]
+        },
+        contents: [{
+          role: "user",
+          parts: [{
+            text: [
+              `Draft ID: ${draft.id}`,
+              `Topic: ${draft.topic}`,
+              `Target: ${draft.target || "all"}`,
+              "",
+              "Original draft:",
+              draft.text,
+              "",
+              "User revision request:",
+              instruction
+            ].join("\n")
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.45,
+          maxOutputTokens: 700
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    return [
+      draft.text,
+      "",
+      `Gemini revision failed: ${await response.text()}`,
+      "Manual edit recommended before approval."
+    ].join("\n");
+  }
+
+  const body = await response.json();
+  const text = body.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text || "")
+    .join("")
+    .trim();
+
+  return text || draft.text;
+}
+
+export async function generateDemandTopics({ findings }, env) {
+  const model = env.GEMINI_TEXT_MODEL || "gemini-2.5-flash-lite";
+  const compactFindings = findings.slice(0, 40).map((finding) => ({
+    title: finding.title || "",
+    excerpt: String(finding.excerpt || finding.fullText || "").slice(0, 900),
+    url: finding.url || "",
+    score: finding.score || 0,
+    sourceTopic: finding.topic || ""
+  }));
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{
+            text: [
+              "You analyze demand signals from engineering forums, Reddit, news, and public discussions.",
+              "Find post topics that users currently care about in electrical power engineering.",
+              "Return only valid compact JSON.",
+              "Prefer practical pain points: questions, repeated confusion, design choices, calculations, standards, tools, failures.",
+              "Do not invent demand that is not supported by the findings."
+            ].join(" ")
+          }]
+        },
+        contents: [{
+          role: "user",
+          parts: [{
+            text: JSON.stringify({
+              requiredJsonShape: {
+                topics: [{
+                  topic: "string",
+                  angle: "string",
+                  demandReason: "string",
+                  target: "linkedin_personal or linkedin_company",
+                  evidenceUrls: ["string"]
+                }]
+              },
+              findings: compactFindings
+            })
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 900,
+          responseMimeType: "application/json"
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Gemini demand analysis failed: ${response.status} ${await response.text()}`);
+  }
+
+  const body = await response.json();
+  const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
+  return JSON.parse(text || "{\"topics\":[]}");
+}
+
 export async function parseDialogueTurn({ message, fastMemory, recentMessages }, env) {
   const model = env.GEMINI_TEXT_MODEL || "gemini-2.5-flash-lite";
   const response = await fetch(

@@ -46,6 +46,18 @@ export async function updateDraftStatus(env, id, status) {
     .run();
 }
 
+export async function updateDraftText(env, id, text) {
+  if (!env.DB) {
+    const draft = memoryDrafts.get(id);
+    if (draft) memoryDrafts.set(id, { ...draft, text, updatedAt: new Date().toISOString() });
+    return;
+  }
+
+  await env.DB.prepare("update drafts set text = ?, status = ?, updated_at = ? where id = ?")
+    .bind(text, "pending", new Date().toISOString(), id)
+    .run();
+}
+
 function fromRow(row) {
   return {
     id: row.id,

@@ -187,13 +187,27 @@ function formatDraft(draft) {
     ].join("\n"),
     options: {
       reply_markup: {
-        inline_keyboard: [[
-          { text: "Approve", callback_data: `approve:${draft.id}` },
-          { text: "Reject", callback_data: `reject:${draft.id}` }
-        ]]
+        inline_keyboard: draftButtons(draft.id)
       }
     }
   };
+}
+
+function draftButtons(id) {
+  return [
+    [
+      { text: "Approve", callback_data: `approve:${id}` },
+      { text: "Reject", callback_data: `reject:${id}` }
+    ],
+    [
+      { text: "Shorter", callback_data: `revise_short:${id}` },
+      { text: "More technical", callback_data: `revise_tech:${id}` }
+    ],
+    [
+      { text: "Less salesy", callback_data: `revise_nosales:${id}` },
+      { text: "Regenerate", callback_data: `revise_regen:${id}` }
+    ]
+  ];
 }
 
 function formatDraftBrief(draft) {

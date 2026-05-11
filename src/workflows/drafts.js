@@ -1,5 +1,5 @@
 import { publishToSocials } from "../social/index.js";
-import { insertDraft, listDraftsByStatus, readDraft, updateDraftStatus } from "../storage/drafts.js";
+import { insertDraft, listDraftsByStatus, readDraft, updateDraftStatus, updateDraftText } from "../storage/drafts.js";
 
 export async function createDraftFromTopic(topic, context) {
   const draft = {
@@ -18,6 +18,21 @@ export async function createDraftFromTopic(topic, context) {
 
 export async function listPendingDrafts(env) {
   return listDraftsByStatus(env, "pending");
+}
+
+export async function reviseDraft(id, instruction, context) {
+  const draft = await readDraft(context.env, id);
+  if (!draft) return { ok: false, message: `Draft ${id} not found.` };
+  if (draft.status !== "pending") return { ok: false, message: `Draft ${id} is ${draft.status}.` };
+
+  const text = await reviseDraftText(draft, instruction, context.env);
+  await updateDraftText(context.env, id, text);
+
+  return {
+    ok: true,
+    draft: { ...draft, text, status: "pending" },
+    message: `Draft ${id}: updated.`
+  };
 }
 
 export async function approveDraft(id, context) {
@@ -78,4 +93,18 @@ async function generateDraftText(topic, env, finding = null, target = "all") {
     "This placeholder will be replaced by an AI-generated post after an LLM provider is connected.",
     "Recommended structure: hook, engineering insight, practical takeaway, and one question for discussion."
   ].filter(Boolean).join("\n");
+}
+
+async function reviseDraftText(draft, instruction, env) {
+  if (env.GEMINI_API_KEY) {
+    const { revisePostDraft } = await import("../ai/gemini.js");
+    return revisePostDraft({ draft, instruction }, env);
+  }
+
+  return [
+    draft.text,
+    "",
+    `Revision requested: ${instruction}`,
+    "Manual edit recommended because no LLM provider is connected."
+  ].join("\n");
 }

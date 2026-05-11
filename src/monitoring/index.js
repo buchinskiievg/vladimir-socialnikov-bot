@@ -1,9 +1,10 @@
-import { createDraftFromFinding } from "../workflows/drafts.js";
 import { insertLead } from "../storage/leads.js";
 import { listSources, updateSourceCheckedAt } from "../storage/sources.js";
 import { fetchRssItems } from "./rss.js";
 import { enrichItem } from "./thread-scanner.js";
 import { insertScanRun } from "../storage/scan-runs.js";
+import { createDraftsFromDemand } from "../workflows/demand.js";
+import { sendTelegramMessage } from "../telegram-api.js";
 
 export async function runMonitoringCycle(env, event) {
   const startedAt = new Date().toISOString();
@@ -63,9 +64,23 @@ export async function runMonitoringCycle(env, event) {
     }
   }
 
-  const draftFindings = findings.slice(0, Number(env.MAX_DRAFTS_PER_MONITORING_RUN || 3));
-  for (const finding of draftFindings) {
-    await createDraftFromFinding(finding, env);
+  const demandResult = await createDraftsFromDemand(findings, env);
+  if (demandResult.drafts.length) {
+    await notifyDemandDrafts(env, demandResult);
+  }
+  if (demandResult.topics.length || demandResult.drafts.length) {
+    await insertScanRun(env, {
+      sourceId: "demand-analysis",
+      sourceName: "AI demand analysis",
+      sourceType: "ai_demand",
+      checkedAt: startedAt,
+      itemsFound: findings.length,
+      itemsEnriched: 0,
+      findingsFound: demandResult.topics.length,
+      leadsFound: 0,
+      draftsCreated: demandResult.drafts.length,
+      error: ""
+    });
   }
 
   console.log(JSON.stringify({
@@ -75,8 +90,62 @@ export async function runMonitoringCycle(env, event) {
     startedAt,
     sources: sources.length,
     findings: findings.length,
+    demandTopics: demandResult.topics.length,
+    draftsCreated: demandResult.drafts.length,
     dryRun: env.SOCIAL_DRY_RUN !== "false"
   }));
+}
+
+async function notifyDemandDrafts(env, demandResult) {
+  const chatId = env.TELEGRAM_REPORT_CHAT_ID || firstAllowedUser(env);
+  if (!chatId) return;
+
+  await sendTelegramMessage(env, chatId, "Нашел темы со спросом и подготовил черновики на approval:", { parse_mode: undefined });
+  for (const draft of demandResult.drafts) {
+    await sendTelegramMessage(env, chatId, formatDraft(draft).text, formatDraft(draft).options);
+  }
+}
+
+function formatDraft(draft) {
+  return {
+    text: [
+      `Draft ${draft.id}`,
+      `Topic: ${compactTopic(draft.topic)}`,
+      `Target: ${draft.target || "all"}`,
+      "",
+      draft.text,
+      "",
+      `Approve: /approve ${draft.id}`,
+      `Reject: /reject ${draft.id}`
+    ].join("\n").slice(0, 3900),
+    options: {
+      parse_mode: undefined,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "Approve", callback_data: `approve:${draft.id}` },
+            { text: "Reject", callback_data: `reject:${draft.id}` }
+          ],
+          [
+            { text: "Shorter", callback_data: `revise_short:${draft.id}` },
+            { text: "More technical", callback_data: `revise_tech:${draft.id}` }
+          ],
+          [
+            { text: "Less salesy", callback_data: `revise_nosales:${draft.id}` },
+            { text: "Regenerate", callback_data: `revise_regen:${draft.id}` }
+          ]
+        ]
+      }
+    }
+  };
+}
+
+function compactTopic(topic) {
+  return String(topic || "").split(/\r?\n/)[0].slice(0, 180);
+}
+
+function firstAllowedUser(env) {
+  return String(env.ALLOWED_TELEGRAM_USER_IDS || "").split(",").map((id) => id.trim()).find(Boolean);
 }
 
 function scoreItem(item, topic) {
