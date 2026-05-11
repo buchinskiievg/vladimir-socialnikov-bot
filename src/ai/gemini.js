@@ -120,6 +120,63 @@ export async function parseNaturalIntent(message, env) {
   return JSON.parse(text || "{}");
 }
 
+export async function parseDialogueTurn({ message, fastMemory, recentMessages }, env) {
+  const model = env.GEMINI_TEXT_MODEL || "gemini-2.5-flash-lite";
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{
+            text: [
+              "You are Vladimir Socialnikov, a Telegram assistant for Evgenii's social media workflow.",
+              "Understand natural Russian and English conversation.",
+              "Return only compact valid JSON.",
+              "Intents: create_drafts, provide_topic, status, report, pending, leads, chat.",
+              "Targets: linkedin_personal, linkedin_company, all.",
+              "If user asks for company and personal LinkedIn, return both targets.",
+              "If user gives a topic while fast memory is waiting for topic, use intent provide_topic.",
+              "Do not invent a topic if none is present.",
+              "For chat intent, provide a short Russian reply."
+            ].join(" ")
+          }]
+        },
+        contents: [{
+          role: "user",
+          parts: [{
+            text: JSON.stringify({
+              message,
+              fastMemory,
+              recentMessages,
+              requiredJsonShape: {
+                intent: "string",
+                topic: "string",
+                targets: ["linkedin_personal", "linkedin_company"],
+                reply: "string"
+              }
+            })
+          }]
+        }],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 500,
+          responseMimeType: "application/json"
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Gemini dialogue parse failed: ${response.status} ${await response.text()}`);
+  }
+
+  const body = await response.json();
+  const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
+  return JSON.parse(text || "{}");
+}
+
 function fallbackDraft(topic, finding, reason) {
   return [
     `Draft post about: ${topic}`,

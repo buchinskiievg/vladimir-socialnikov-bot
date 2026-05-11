@@ -116,3 +116,9 @@ The bot also accepts natural-language Russian/English requests, for example:
 ```text
 Владимир, подготовь публикацию для LinkedIn компании и персонального аккаунта про компенсацию реактивной мощности на промышленных объектах.
 ```
+
+Conversation memory:
+
+- Fast memory is stored in D1 for recent dialogue state and pending intents.
+- Slow memory is archived to Cloudflare R2 as JSONL files for long-term continuity.
+- Message retention target is 180 days.

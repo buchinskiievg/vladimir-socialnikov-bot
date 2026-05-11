@@ -3,6 +3,7 @@ import { approveDraft, createDraftFromTopic, listPendingDrafts, rejectDraft } fr
 import { addSource, listSources } from "./storage/sources.js";
 import { listLeadsByStatus } from "./storage/leads.js";
 import { buildDailyReport } from "./reports/daily.js";
+import { handleDialogue } from "./dialogue.js";
 
 export async function routeCommand(text, context) {
   const trimmed = text.trim();
@@ -24,6 +25,7 @@ export async function routeCommand(text, context) {
       "/sources - list monitored sources",
       "/leads - list new leads",
       "/report - daily monitoring report",
+      "/memory - check dialogue memory storage",
       "/test-publish - dry-run check all configured publishing connectors",
       "/post <text> - draft/publish to connected social networks",
       "",
@@ -81,6 +83,15 @@ export async function routeCommand(text, context) {
     return { text: await buildDailyReport(context.env), options: { parse_mode: undefined } };
   }
 
+  if (firstLine === "/memory") {
+    return [
+      "Memory status:",
+      `Fast memory (D1): ${context.env.DB ? "connected" : "not connected"}`,
+      `Slow archive (R2): ${context.env.MESSAGE_ARCHIVE ? "connected" : "not connected"}`,
+      "Retention target: 180 days"
+    ].join("\n");
+  }
+
   if (firstLine === "/test-publish") {
     const result = await publishToSocials({ text: "Connector test from Vladimir Socialnikov Bot. Dry-run should be enabled." }, context.env);
     return formatPublishResult(result);
@@ -114,7 +125,19 @@ export async function routeCommand(text, context) {
     return formatPublishResult(result);
   }
 
-  return handleNaturalLanguage(trimmed, context);
+  try {
+    return await handleNaturalLanguage(trimmed, context);
+  } catch (error) {
+    console.log(JSON.stringify({ ok: false, job: "natural-language-command", error: error.message }));
+    return [
+      "Не смог обработать сообщение через AI.",
+      `Ошибка: ${error.message}`,
+      "",
+      "Пока можно использовать короткую команду:",
+      "/personal-draft <topic>",
+      "/company-draft <topic>"
+    ].join("\n");
+  }
 }
 
 function buildStatus(env) {
@@ -180,6 +203,23 @@ function formatLeadBrief(lead) {
 }
 
 async function handleNaturalLanguage(message, context) {
+  if (context.message?.chat?.id) {
+    const dialogueResponse = await handleDialogue(context.message, context);
+    if (dialogueResponse === "/status") return buildStatus(context.env);
+    if (dialogueResponse === "/report") return { text: await buildDailyReport(context.env), options: { parse_mode: undefined } };
+    if (dialogueResponse === "/pending") {
+      const drafts = await listPendingDrafts(context.env);
+      if (drafts.length === 0) return "No pending drafts.";
+      return drafts.map(formatDraftBrief).join("\n\n");
+    }
+    if (dialogueResponse === "/leads") {
+      const leads = await listLeadsByStatus(context.env, "new");
+      if (leads.length === 0) return "No new leads.";
+      return leads.map(formatLeadBrief).join("\n\n");
+    }
+    return dialogueResponse;
+  }
+
   const intent = await parseIntent(message, context.env);
 
   if (intent.intent === "status") return buildStatus(context.env);

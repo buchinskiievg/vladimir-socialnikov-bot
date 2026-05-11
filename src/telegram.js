@@ -27,7 +27,7 @@ export async function handleTelegramWebhook(request, env, ctx) {
 
   const text = message.text || "";
   const reply = await routeCommand(text, { env, update, message });
-  ctx.waitUntil(sendTelegramMessage(env, message.chat.id, reply.text || reply, reply.options || {}));
+  await sendTelegramMessage(env, message.chat.id, reply.text || reply, reply.options || {});
 
   return Response.json({ ok: true });
 }

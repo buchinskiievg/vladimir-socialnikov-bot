@@ -27,3 +27,7 @@ MAX_HTML_THREAD_CHARS = "12000"
 binding = "DB"
 database_name = "vladimir-socialnikov-bot-db"
 database_id = "2aff985f-a0c2-41d2-8c53-1997037529fa"
+
+[[r2_buckets]]
+binding = "MESSAGE_ARCHIVE"
+bucket_name = "vladimir-socialnikov-message-archive"
