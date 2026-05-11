@@ -22,7 +22,28 @@ export async function handleDialogue(message, context) {
 
   const fastMemory = await readFastMemory(env, chatId);
   const recentMessages = await listRecentMessages(env, chatId, 16);
-  const effectiveMemory = startsNewDraftRequest(text)
+  const newDraftRequest = startsNewDraftRequest(text);
+  const explicitTopic = extractExplicitTopic(text);
+
+  if (newDraftRequest && !explicitTopic) {
+    const targets = inferTargets(text);
+    await writeFastMemory(env, {
+      ...fastMemory,
+      chatId,
+      updatedAt: new Date().toISOString(),
+      pendingIntent: "create_drafts",
+      pendingTargets: targets,
+      pendingTopicHint: ""
+    });
+
+    const response = "Понял. Для каких тем готовим публикации?";
+    const assistantMessage = { chatId, userId: "bot", role: "assistant", text: response, createdAt: new Date().toISOString() };
+    await appendChatMessage(env, assistantMessage);
+    await archiveMessageToSlowMemory(env, assistantMessage);
+    return response;
+  }
+
+  const effectiveMemory = newDraftRequest
     ? { ...fastMemory, pendingIntent: "", pendingTargets: [], pendingTopicHint: "" }
     : fastMemory;
   const turn = await parseDialogueTurn({ message: text, fastMemory: effectiveMemory, recentMessages }, env);
@@ -152,6 +173,21 @@ function startsNewDraftRequest(text) {
     "prepare",
     "write a post"
   ].some((marker) => lower.includes(marker));
+}
+
+function extractExplicitTopic(text) {
+  const match = String(text || "").match(/(?:по теме|на тему|про|about)\s+(.+)$/i);
+  const topic = match?.[1]?.trim() || "";
+  return topic.length >= 8 ? topic : "";
+}
+
+function inferTargets(text) {
+  const lower = String(text || "").toLowerCase();
+  const targets = [];
+  if (lower.includes("личн") || lower.includes("персональн") || lower.includes("personal")) targets.push("linkedin_personal");
+  if (lower.includes("компан") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company") || lower.includes("ieccalc")) targets.push("linkedin_company");
+  if (!targets.length && lower.includes("linkedin")) return ["all"];
+  return targets.length ? targets : ["all"];
 }
 
 export async function resetDialogue(env, chatId) {
