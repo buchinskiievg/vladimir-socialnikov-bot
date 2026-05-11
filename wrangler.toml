@@ -22,6 +22,8 @@ SOURCE_SCANNER_USER_AGENT = "social-telegram-worker-bot/0.1 (+https://workers.cl
 ENRICH_THREADS = "true"
 MAX_COMMENTS_PER_THREAD = "12"
 MAX_HTML_THREAD_CHARS = "12000"
+MAX_NEWS_AGE_DAYS = "14"
+FINDING_SENTENCE_RETENTION_DAYS = "30"
 
 [[d1_databases]]
 binding = "DB"

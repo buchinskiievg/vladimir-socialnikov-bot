@@ -5,11 +5,19 @@ import { enrichItem } from "./thread-scanner.js";
 import { insertScanRun } from "../storage/scan-runs.js";
 import { createDraftsFromDemand } from "../workflows/demand.js";
 import { sendTelegramMessage } from "../telegram-api.js";
+import {
+  firstSentenceFromItem,
+  hasFindingSentence,
+  normalizeSentence,
+  pruneExpiredFindingSentences,
+  rememberFindingSentence
+} from "../storage/finding-memory.js";
 
 export async function runMonitoringCycle(env, event) {
   const startedAt = new Date().toISOString();
   const sources = await listSources(env);
   const findings = [];
+  await pruneExpiredFindingSentences(env, startedAt);
 
   for (const source of sources) {
     const stats = {
@@ -32,12 +40,22 @@ export async function runMonitoringCycle(env, event) {
       stats.itemsFound = items.length;
 
       for (const rawItem of items) {
+        if (!isFreshEnough(rawItem, source, env)) continue;
         const item = shouldEnrich(rawItem, source, env)
           ? await enrichItem(rawItem, source, env)
           : rawItem;
         if (item.fullText || item.commentsText) stats.itemsEnriched += 1;
         const score = scoreItem(item, source.topic);
         if (score >= 2) {
+          const sentence = firstSentenceFromItem(item);
+          const normalizedKey = normalizeSentence(sentence);
+          if (await hasFindingSentence(env, normalizedKey)) continue;
+          await rememberFindingSentence(env, {
+            normalizedKey,
+            rawSentence: sentence,
+            sourceUrl: item.url || source.url,
+            firstSeenAt: startedAt
+          });
           stats.findingsFound += 1;
           findings.push({ ...item, score, topic: source.topic, sourceId: source.id });
         }
@@ -190,4 +208,21 @@ function shouldEnrich(item, source, env) {
   if (env.ENRICH_THREADS === "false") return false;
   if (!item.url) return false;
   return source.type === "reddit" || source.type === "forum" || source.type === "news" || source.type === "classifieds";
+}
+
+function isFreshEnough(item, source, env) {
+  const maxDays = Number(env.MAX_NEWS_AGE_DAYS || 14);
+  if (!["rss", "news", "reddit"].includes(source.type)) return true;
+
+  const publishedAt = parsePublishedAt(item.publishedAt);
+  if (!publishedAt) return source.type !== "news";
+
+  const cutoff = Date.now() - maxDays * 24 * 60 * 60 * 1000;
+  return publishedAt.getTime() >= cutoff;
+}
+
+function parsePublishedAt(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
