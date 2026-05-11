@@ -220,7 +220,8 @@ export async function generateDemandTopics({ findings }, env) {
                   demandReason: "string",
                   target: "linkedin_personal or linkedin_company",
                   evidenceUrls: ["string"],
-                  score: 0
+                  score: 0,
+                  whyPopular: "string"
                 }]
               },
               findings: compactFindings

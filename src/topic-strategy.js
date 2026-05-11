@@ -19,6 +19,10 @@ export const PLATFORM_TOPICS = {
     "solar installer and electrical contractor pain points",
     "off-grid and C&I solar design questions",
     "equipment selection: inverters, batteries, panels, switchgear",
+    "electrical engineering software reviews and tool comparisons",
+    "ETAP, DIgSILENT PowerFactory, SKM, EasyPower, CYME, PSS/E, PVsyst, HelioScope workflows",
+    "power system studies software: load flow, short circuit, arc flash, protection coordination",
+    "calculator and template recommendations for electrical design",
     "local code, permitting, and utility interconnection",
     "service leads: design help, calculations, documentation",
     "cost, payback, and reliability discussions"

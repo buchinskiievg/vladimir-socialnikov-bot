@@ -13,6 +13,7 @@ export async function scoreMaterial(item, source, env) {
   const materialScore = scoreMaterialAmount(item, text);
   const freshnessScore = scoreFreshness(item.publishedAt);
   const leadScore = scoreLeadPotential(lower);
+  const softwareScore = scoreSoftwareInterest(lower, platform);
 
   const total = Math.round(
     topicScore * 0.25 +
@@ -20,7 +21,8 @@ export async function scoreMaterial(item, source, env) {
     popularityScore * 0.18 +
     materialScore * 0.14 +
     freshnessScore * 0.11 +
-    leadScore * 0.10
+    leadScore * 0.10 +
+    softwareScore * 0.10
   );
 
   return {
@@ -32,7 +34,8 @@ export async function scoreMaterial(item, source, env) {
       popularity: popularityScore,
       material: materialScore,
       freshness: freshnessScore,
-      lead: leadScore
+      lead: leadScore,
+      software: softwareScore
     },
     matchedTopics: matchTopics(lower, topics).slice(0, 3)
   };
@@ -47,11 +50,57 @@ export function scoreLeadPotential(text) {
     ["consultant", 20],
     ["software", 14],
     ["tool", 12],
+    ["etap", 24],
+    ["digSilent".toLowerCase(), 22],
+    ["powerfactory", 22],
+    ["skm", 20],
+    ["easypower", 20],
+    ["cyme", 18],
+    ["pss/e", 18],
+    ["psse", 18],
+    ["pvsyst", 18],
+    ["helioscope", 18],
+    ["calculator", 16],
+    ["template", 14],
     ["design help", 22],
     ["proposal", 16],
     ["quote", 16],
     ["contractor", 14]
   ]);
+}
+
+function scoreSoftwareInterest(text, platform) {
+  const base = platform === "facebook" ? 12 : 0;
+  return Math.min(100, base + cappedScore(text, [
+    ["etap", 28],
+    ["digSilent".toLowerCase(), 26],
+    ["powerfactory", 26],
+    ["skm", 24],
+    ["easypower", 24],
+    ["cyme", 22],
+    ["pss/e", 22],
+    ["psse", 22],
+    ["pvsyst", 22],
+    ["helioscope", 20],
+    ["homer pro", 18],
+    ["neplan", 18],
+    ["pscad", 18],
+    ["matlab", 12],
+    ["simulink", 12],
+    ["software", 16],
+    ["tool", 12],
+    ["calculator", 18],
+    ["template", 16],
+    ["spreadsheet", 14],
+    ["compare", 12],
+    ["review", 14],
+    ["workflow", 14],
+    ["load flow", 18],
+    ["short circuit", 18],
+    ["arc flash", 18],
+    ["protection coordination", 20],
+    ["relay coordination", 20]
+  ]));
 }
 
 function scoreTopicFit(text, topics) {
