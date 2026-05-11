@@ -5,6 +5,7 @@ import {
   archiveMessageToSlowMemory,
   listRecentMessages,
   readFastMemory,
+  resetFastMemory,
   writeFastMemory
 } from "./storage/memory.js";
 
@@ -21,8 +22,11 @@ export async function handleDialogue(message, context) {
 
   const fastMemory = await readFastMemory(env, chatId);
   const recentMessages = await listRecentMessages(env, chatId, 16);
-  const turn = await parseDialogueTurn({ message: text, fastMemory, recentMessages }, env);
-  const response = await executeDialogueTurn(turn, { ...context, message, fastMemory });
+  const effectiveMemory = startsNewDraftRequest(text)
+    ? { ...fastMemory, pendingIntent: "", pendingTargets: [], pendingTopicHint: "" }
+    : fastMemory;
+  const turn = await parseDialogueTurn({ message: text, fastMemory: effectiveMemory, recentMessages }, env);
+  const response = await executeDialogueTurn(turn, { ...context, message, fastMemory: effectiveMemory });
 
   const assistantMessage = { chatId, userId: "bot", role: "assistant", text: responseToMemoryText(response), createdAt: new Date().toISOString() };
   await appendChatMessage(env, assistantMessage);
@@ -135,4 +139,21 @@ function responseToMemoryText(response) {
       .join("\n\n");
   }
   return JSON.stringify(response || "");
+}
+
+function startsNewDraftRequest(text) {
+  const lower = String(text || "").toLowerCase();
+  return [
+    "подготовь",
+    "сделай пост",
+    "сделай публикац",
+    "напиши пост",
+    "draft",
+    "prepare",
+    "write a post"
+  ].some((marker) => lower.includes(marker));
+}
+
+export async function resetDialogue(env, chatId) {
+  await resetFastMemory(env, chatId);
 }

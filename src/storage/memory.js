@@ -80,6 +80,17 @@ export async function writeFastMemory(env, memory) {
     .run();
 }
 
+export async function resetFastMemory(env, chatId) {
+  await writeFastMemory(env, {
+    chatId: String(chatId),
+    updatedAt: new Date().toISOString(),
+    pendingIntent: "",
+    pendingTargets: [],
+    pendingTopicHint: "",
+    summary: ""
+  });
+}
+
 export async function archiveMessageToSlowMemory(env, message) {
   if (!env.MESSAGE_ARCHIVE) return;
 

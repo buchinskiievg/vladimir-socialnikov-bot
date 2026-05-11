@@ -4,6 +4,7 @@ import { addSource, listSources } from "./storage/sources.js";
 import { listLeadsByStatus } from "./storage/leads.js";
 import { buildDailyReport } from "./reports/daily.js";
 import { handleDialogue } from "./dialogue.js";
+import { resetDialogue } from "./dialogue.js";
 
 export async function routeCommand(text, context) {
   const trimmed = text.trim();
@@ -21,6 +22,7 @@ export async function routeCommand(text, context) {
       "/pending - list drafts waiting for approval",
       "/approve <id> - publish an approved draft",
       "/reject <id> - reject a draft",
+      "/reset - clear current dialogue state",
       "/source add <type> <topic> <url> - monitor a source",
       "/sources - list monitored sources",
       "/leads - list new leads",
@@ -35,6 +37,11 @@ export async function routeCommand(text, context) {
 
   if (firstLine === "/status") {
     return buildStatus(context.env);
+  }
+
+  if (firstLine === "/reset") {
+    await resetDialogue(context.env, context.message?.chat?.id || "default");
+    return "Dialogue state cleared.";
   }
 
   if (firstLine.startsWith("/draft ")) {
