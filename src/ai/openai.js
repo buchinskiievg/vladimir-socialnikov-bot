@@ -19,7 +19,7 @@ export async function generatePostDraft({ topic, finding }, env) {
         },
         {
           role: "user",
-          content: `Prepare one LinkedIn-style draft about: ${topic}\n\n${source}\n\nStructure: strong first line, 2-4 useful technical points, practical takeaway, discussion question.`
+            content: `Prepare one final LinkedIn-style post for human approval about: ${topic}\n\n${source}\n\nStructure: strong first line, 2-4 useful technical points, practical takeaway, discussion question.`
         }
       ]
     })
@@ -35,10 +35,10 @@ export async function generatePostDraft({ topic, finding }, env) {
 
 function fallbackDraft(topic, finding, reason) {
   return [
-    `Draft post about: ${topic}`,
+    `Final post about: ${topic}`,
     finding?.url ? `Source: ${finding.url}` : null,
     "",
-    `AI draft generation failed: ${reason}`,
+    `AI post generation failed: ${reason}`,
     "Manual edit recommended before approval."
   ].filter(Boolean).join("\n");
 }

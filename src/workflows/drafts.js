@@ -22,8 +22,8 @@ export async function listPendingDrafts(env) {
 
 export async function reviseDraft(id, instruction, context) {
   const draft = await readDraft(context.env, id);
-  if (!draft) return { ok: false, message: `Draft ${id} not found.` };
-  if (draft.status !== "pending") return { ok: false, message: `Draft ${id} is ${draft.status}.` };
+  if (!draft) return { ok: false, message: `Post ${id} not found.` };
+  if (draft.status !== "pending") return { ok: false, message: `Post ${id} is ${draft.status}.` };
 
   const text = await reviseDraftText(draft, instruction, context.env);
   await updateDraftText(context.env, id, text);
@@ -31,19 +31,19 @@ export async function reviseDraft(id, instruction, context) {
   return {
     ok: true,
     draft: { ...draft, text, status: "pending" },
-    message: `Draft ${id}: updated.`
+    message: `Post ${id}: updated.`
   };
 }
 
 export async function approveDraft(id, context) {
   const draft = await readDraft(context.env, id);
-  if (!draft) return { ok: false, message: `Draft ${id} not found.` };
-  if (draft.status !== "pending") return { ok: false, message: `Draft ${id} is ${draft.status}.` };
+  if (!draft) return { ok: false, message: `Post ${id} not found.` };
+  if (draft.status !== "pending") return { ok: false, message: `Post ${id} is ${draft.status}.` };
 
   const publishResult = await publishToSocials({ text: draft.text, target: draft.target || "all" }, context.env);
   await updateDraftStatus(context.env, id, publishResult.ok ? "published" : "publish_failed");
 
-  const lines = [`Draft ${id}: ${publishResult.ok ? "published" : "publish failed"}`];
+  const lines = [`Post ${id}: ${publishResult.ok ? "published" : "publish failed"}`];
   for (const item of publishResult.results) {
     lines.push(`${item.network}: ${item.ok ? "ok" : "failed"}${item.message ? ` - ${item.message}` : ""}`);
   }
@@ -53,9 +53,9 @@ export async function approveDraft(id, context) {
 
 export async function rejectDraft(id, env) {
   const draft = await readDraft(env, id);
-  if (!draft) return { ok: false, message: `Draft ${id} not found.` };
+  if (!draft) return { ok: false, message: `Post ${id} not found.` };
   await updateDraftStatus(env, id, "rejected");
-  return { ok: true, message: `Draft ${id}: rejected.` };
+  return { ok: true, message: `Post ${id}: rejected.` };
 }
 
 export async function createDraftFromFinding(finding, env) {
@@ -87,7 +87,7 @@ async function generateDraftText(topic, env, finding = null, target = "all") {
 
   const sourceLine = finding?.url ? `Source: ${finding.url}` : null;
   return [
-    `Draft post about: ${topic}`,
+    `Final post about: ${topic}`,
     sourceLine,
     "",
     "This placeholder will be replaced by an AI-generated post after an LLM provider is connected.",

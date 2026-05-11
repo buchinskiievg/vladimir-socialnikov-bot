@@ -22,12 +22,9 @@ export async function routeCommand(text, context) {
       "",
       "Commands:",
       "/status - check configuration",
-      "/draft <topic> - prepare a post draft",
-      "/personal-draft <topic> - prepare a LinkedIn personal profile draft",
-      "/company-draft <topic> - prepare a LinkedIn company page draft",
-      "/pending - list drafts waiting for approval",
-      "/approve <id> - publish an approved draft",
-      "/reject <id> - reject a draft",
+      "/pending - list final posts waiting for approval",
+      "/approve <id> - publish the approved post",
+      "/reject <id> - reject the post",
       "/reset - clear current dialogue state",
       "/source add <type> <topic> <url> - monitor a source",
       "/sources - list monitored sources",
@@ -36,7 +33,7 @@ export async function routeCommand(text, context) {
       "/memory - check dialogue memory storage",
       "/topics - show proposed/active topic strategy",
       "/test-publish - dry-run check all configured publishing connectors",
-      "/post <text> - draft/publish to connected social networks",
+      "/post <text> - publish text to connected social networks",
       "",
       "Publishing is in dry-run mode until SOCIAL_DRY_RUN=false and real API credentials are configured."
     ].join("\n");
@@ -118,20 +115,20 @@ export async function routeCommand(text, context) {
 
   if (firstLine === "/pending") {
     const drafts = await listPendingDrafts(context.env);
-    if (drafts.length === 0) return "No pending drafts.";
+    if (drafts.length === 0) return "No posts waiting for approval.";
     return drafts.map(formatDraftBrief).join("\n\n");
   }
 
   if (firstLine.startsWith("/approve ")) {
     const id = firstLine.slice("/approve ".length).trim();
-    if (!id) return "Draft id is empty.";
+    if (!id) return "Post id is empty.";
     const result = await approveDraft(id, context);
     return result.message;
   }
 
   if (firstLine.startsWith("/reject ")) {
     const id = firstLine.slice("/reject ".length).trim();
-    if (!id) return "Draft id is empty.";
+    if (!id) return "Post id is empty.";
     const result = await rejectDraft(id, context.env);
     return result.message;
   }
@@ -188,7 +185,7 @@ function formatPublishResult(result) {
 function formatDraft(draft) {
   return {
     text: [
-    `Draft ${draft.id}`,
+    `Post ${draft.id} - ready for approval`,
     `Topic: ${draft.topic}`,
     `Target: ${draft.target || "all"}`,
     "",
@@ -210,20 +207,12 @@ function draftButtons(id) {
     [
       { text: "Approve", callback_data: `approve:${id}` },
       { text: "Reject", callback_data: `reject:${id}` }
-    ],
-    [
-      { text: "Shorter", callback_data: `revise_short:${id}` },
-      { text: "More technical", callback_data: `revise_tech:${id}` }
-    ],
-    [
-      { text: "Less salesy", callback_data: `revise_nosales:${id}` },
-      { text: "Regenerate", callback_data: `revise_regen:${id}` }
     ]
   ];
 }
 
 function formatDraftBrief(draft) {
-  return [`Draft ${draft.id}`, `Topic: ${draft.topic}`, draft.text.slice(0, 300)].join("\n");
+  return [`Post ${draft.id} - waiting for approval`, `Topic: ${draft.topic}`, draft.text.slice(0, 300)].join("\n");
 }
 
 function formatLeadBrief(lead) {
@@ -245,7 +234,7 @@ async function handleNaturalLanguage(message, context) {
     if (dialogueResponse === "/report") return { text: await buildDailyReport(context.env), options: { parse_mode: undefined } };
     if (dialogueResponse === "/pending") {
       const drafts = await listPendingDrafts(context.env);
-      if (drafts.length === 0) return "No pending drafts.";
+      if (drafts.length === 0) return "No posts waiting for approval.";
       return drafts.map(formatDraftBrief).join("\n\n");
     }
     if (dialogueResponse === "/leads") {
@@ -261,7 +250,7 @@ async function handleNaturalLanguage(message, context) {
   if (intent.intent === "status") return buildStatus(context.env);
   if (intent.intent === "pending") {
     const drafts = await listPendingDrafts(context.env);
-    if (drafts.length === 0) return "No pending drafts.";
+    if (drafts.length === 0) return "No posts waiting for approval.";
     return drafts.map(formatDraftBrief).join("\n\n");
   }
   if (intent.intent === "report") {
@@ -403,11 +392,11 @@ function normalizeTargets(targets) {
 }
 
 function formatMultipleDrafts(drafts) {
-  const lines = [`Prepared ${drafts.length} draft${drafts.length === 1 ? "" : "s"}.`];
+  const lines = [`Prepared ${drafts.length} final post${drafts.length === 1 ? "" : "s"} for approval.`];
   for (const draft of drafts) {
     lines.push(
       "",
-      `Draft ${draft.id}`,
+      `Post ${draft.id} - ready for approval`,
       `Topic: ${draft.topic}`,
       `Target: ${draft.target || "all"}`,
       "",

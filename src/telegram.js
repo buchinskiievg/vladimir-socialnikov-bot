@@ -1,5 +1,5 @@
 import { routeCommand } from "./commands.js";
-import { approveDraft, rejectDraft, reviseDraft } from "./workflows/drafts.js";
+import { approveDraft, rejectDraft } from "./workflows/drafts.js";
 import { sendTelegramMessage } from "./telegram-api.js";
 
 export async function handleTelegramWebhook(request, env, ctx) {
@@ -53,56 +53,11 @@ async function handleCallbackQuery(callbackQuery, env, ctx) {
     ? await approveDraft(id, { env })
     : action === "reject"
       ? await rejectDraft(id, env)
-      : action.startsWith("revise_")
-        ? await reviseDraft(id, revisionInstruction(action), { env })
-        : { ok: false, message: "Unknown action." };
+      : { ok: false, message: "Unknown action." };
 
   ctx.waitUntil(answerCallbackQuery(env, callbackQuery.id, result.ok ? "Done" : "Failed"));
-  ctx.waitUntil(sendTelegramMessage(env, chatId, result.draft ? formatDraft(result.draft).text : result.message, result.draft ? formatDraft(result.draft).options : {}));
+  ctx.waitUntil(sendTelegramMessage(env, chatId, result.message));
   return Response.json({ ok: true });
-}
-
-function revisionInstruction(action) {
-  const instructions = {
-    revise_short: "Make this draft shorter and more concise. Keep the core engineering point.",
-    revise_tech: "Rewrite this draft to be more technical, practical, and specific for electrical power engineers.",
-    revise_nosales: "Rewrite this draft with less marketing language and a calmer engineering tone.",
-    revise_regen: "Regenerate this draft from scratch with a stronger angle and no meta commentary."
-  };
-  return instructions[action] || "Revise this draft.";
-}
-
-function formatDraft(draft) {
-  return {
-    text: [
-      `Draft ${draft.id}`,
-      `Topic: ${draft.topic}`,
-      `Target: ${draft.target || "all"}`,
-      "",
-      draft.text,
-      "",
-      `Approve: /approve ${draft.id}`,
-      `Reject: /reject ${draft.id}`
-    ].join("\n"),
-    options: {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: "Approve", callback_data: `approve:${draft.id}` },
-            { text: "Reject", callback_data: `reject:${draft.id}` }
-          ],
-          [
-            { text: "Shorter", callback_data: `revise_short:${draft.id}` },
-            { text: "More technical", callback_data: `revise_tech:${draft.id}` }
-          ],
-          [
-            { text: "Less salesy", callback_data: `revise_nosales:${draft.id}` },
-            { text: "Regenerate", callback_data: `revise_regen:${draft.id}` }
-          ]
-        ]
-      }
-    }
-  };
 }
 
 async function answerCallbackQuery(env, callbackQueryId, text) {

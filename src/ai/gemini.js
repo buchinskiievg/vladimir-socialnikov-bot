@@ -35,7 +35,7 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               "",
               source,
               "",
-              "Prepare exactly one LinkedIn-style post draft.",
+              "Prepare exactly one final LinkedIn-style post for human approval.",
               "Use this structure:",
               "1. Strong first line.",
               "2. Three short technical points.",
@@ -86,7 +86,7 @@ export async function parseNaturalIntent(message, env) {
               "If the user asks for LinkedIn company and personal account, include both targets.",
               "Extract the concrete topic after Russian markers like 'про', 'о', 'на тему', 'по теме'.",
               "Example: 'подготовь публикацию для LinkedIn компании и персонального аккаунта про компенсацию реактивной мощности' means topic='компенсация реактивной мощности' and targets=['linkedin_company','linkedin_personal'].",
-              "If a draft request has no concrete topic, set topic to empty string and needs_topic true.",
+              "If a post request has no concrete topic, set topic to empty string and needs_topic true.",
               "Do not invent topics."
             ].join(" ")
           }]
@@ -142,11 +142,11 @@ export async function revisePostDraft({ draft, instruction }, env) {
           role: "user",
           parts: [{
             text: [
-              `Draft ID: ${draft.id}`,
+              `Post ID: ${draft.id}`,
               `Topic: ${draft.topic}`,
               `Target: ${draft.target || "all"}`,
               "",
-              "Original draft:",
+              "Original post:",
               draft.text,
               "",
               "User revision request:",
@@ -304,10 +304,10 @@ export async function parseDialogueTurn({ message, fastMemory, recentMessages },
 
 function fallbackDraft(topic, finding, reason) {
   return [
-    `Draft post about: ${topic}`,
+    `Final post about: ${topic}`,
     finding?.url ? `Source: ${finding.url}` : null,
     "",
-    `Gemini draft generation failed: ${reason}`,
+    `Gemini post generation failed: ${reason}`,
     "Manual edit recommended before approval."
   ].filter(Boolean).join("\n");
 }

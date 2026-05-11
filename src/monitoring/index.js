@@ -129,7 +129,7 @@ async function notifyDemandDrafts(env, demandResult) {
   const chatId = env.TELEGRAM_REPORT_CHAT_ID || firstAllowedUser(env);
   if (!chatId) return;
 
-  await sendTelegramMessage(env, chatId, "Нашел темы со спросом и подготовил черновики на approval:", { parse_mode: undefined });
+  await sendTelegramMessage(env, chatId, "Нашел самые ценные темы и подготовил финальные посты на approval:", { parse_mode: undefined });
   for (const draft of demandResult.drafts) {
     await sendTelegramMessage(env, chatId, formatDraft(draft).text, formatDraft(draft).options);
   }
@@ -138,7 +138,7 @@ async function notifyDemandDrafts(env, demandResult) {
 function formatDraft(draft) {
   return {
     text: [
-      `Draft ${draft.id}`,
+      `Post ${draft.id} - ready for approval`,
       `Topic: ${compactTopic(draft.topic)}`,
       `Target: ${draft.target || "all"}`,
       "",
@@ -154,14 +154,6 @@ function formatDraft(draft) {
           [
             { text: "Approve", callback_data: `approve:${draft.id}` },
             { text: "Reject", callback_data: `reject:${draft.id}` }
-          ],
-          [
-            { text: "Shorter", callback_data: `revise_short:${draft.id}` },
-            { text: "More technical", callback_data: `revise_tech:${draft.id}` }
-          ],
-          [
-            { text: "Less salesy", callback_data: `revise_nosales:${draft.id}` },
-            { text: "Regenerate", callback_data: `revise_regen:${draft.id}` }
           ]
         ]
       }

@@ -29,7 +29,7 @@ export async function buildDailyReport(env) {
     `Threads enriched: ${n(t.items_enriched)}`,
     `Relevant findings: ${n(t.findings_found)}`,
     `New leads: ${n(t.leads_found)}`,
-    `Drafts created: ${n(t.drafts_created)}`,
+    `Posts prepared for approval: ${n(t.drafts_created)}`,
     `Errors: ${n(t.errors)}`,
     "",
     "By source type:",
@@ -40,7 +40,7 @@ export async function buildDailyReport(env) {
     "",
     "Current queues:",
     `New leads in DB: ${newLeads.length}`,
-    `Pending drafts: ${pendingDrafts.length}`
+    `Posts waiting for approval: ${pendingDrafts.length}`
   ];
 
   if (summary.errors?.length) {

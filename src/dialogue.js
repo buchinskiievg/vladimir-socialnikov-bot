@@ -109,7 +109,7 @@ async function executeDialogueTurn(turn, context) {
   if (turn.intent === "pending") return "/pending";
   if (turn.intent === "leads") return "/leads";
 
-  return turn.reply || "Я на связи. Можешь попросить подготовить публикацию, показать отчёт, лиды или pending drafts.";
+  return turn.reply || "Я на связи. Можешь попросить подготовить публикацию, показать отчёт, лиды или посты на проверку.";
 }
 
 async function clearPending(env, fastMemory, chatId) {
@@ -162,7 +162,7 @@ async function handleDraftRevision(text, context) {
   const ids = extractDraftIds(text);
   const targetIds = ids.length ? ids : await inferDraftIdsForRevision(env, text, summary);
   if (!targetIds.length) {
-    return "Понял правку, но не вижу черновика. Напиши, например: перепиши последний черновик короче.";
+    return "Понял правку, но не вижу поста на проверку. Напиши, например: перепиши последний пост короче.";
   }
 
   const updated = [];
@@ -171,7 +171,7 @@ async function handleDraftRevision(text, context) {
     if (result.ok && result.draft) updated.push(result.draft);
   }
 
-  if (!updated.length) return "Не смог найти подходящий pending-черновик для правки.";
+  if (!updated.length) return "Не смог найти подходящий пост на проверку для правки.";
   await rememberDrafts(env, fastMemory, context.chatId, updated);
   return formatDrafts(updated);
 }
@@ -248,10 +248,10 @@ function normalizeTargets(targets) {
 function formatDrafts(drafts) {
   return {
     messages: [
-      `Готово: подготовил ${drafts.length} черновик(а).`,
+      `Готово: подготовил ${drafts.length} финальный пост(а) на проверку.`,
       ...drafts.map((draft) => ({
         text: [
-          `Draft ${draft.id}`,
+          `Post ${draft.id} - ready for approval`,
           `Topic: ${draft.topic}`,
           `Target: ${draft.target || "all"}`,
           "",
@@ -275,14 +275,6 @@ function draftButtons(id) {
     [
       { text: "Approve", callback_data: `approve:${id}` },
       { text: "Reject", callback_data: `reject:${id}` }
-    ],
-    [
-      { text: "Shorter", callback_data: `revise_short:${id}` },
-      { text: "More technical", callback_data: `revise_tech:${id}` }
-    ],
-    [
-      { text: "Less salesy", callback_data: `revise_nosales:${id}` },
-      { text: "Regenerate", callback_data: `revise_regen:${id}` }
     ]
   ];
 }
