@@ -110,3 +110,9 @@ Facebook sources are stored as disabled candidates until they are manually revie
 /leads
 /report
 ```
+
+The bot also accepts natural-language Russian/English requests, for example:
+
+```text
+Владимир, подготовь публикацию для LinkedIn компании и персонального аккаунта про компенсацию реактивной мощности на промышленных объектах.
+```

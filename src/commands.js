@@ -114,7 +114,7 @@ export async function routeCommand(text, context) {
     return formatPublishResult(result);
   }
 
-  return "Unknown command. Send /help.";
+  return handleNaturalLanguage(trimmed, context);
 }
 
 function buildStatus(env) {
@@ -177,4 +177,118 @@ function formatLeadBrief(lead) {
     lead.sourceUrl,
     lead.excerpt || ""
   ].join("\n");
+}
+
+async function handleNaturalLanguage(message, context) {
+  const intent = await parseIntent(message, context.env);
+
+  if (intent.intent === "status") return buildStatus(context.env);
+  if (intent.intent === "pending") {
+    const drafts = await listPendingDrafts(context.env);
+    if (drafts.length === 0) return "No pending drafts.";
+    return drafts.map(formatDraftBrief).join("\n\n");
+  }
+  if (intent.intent === "report") {
+    return { text: await buildDailyReport(context.env), options: { parse_mode: undefined } };
+  }
+  if (intent.intent === "leads") {
+    const leads = await listLeadsByStatus(context.env, "new");
+    if (leads.length === 0) return "No new leads.";
+    return leads.map(formatLeadBrief).join("\n\n");
+  }
+
+  if (intent.intent === "create_drafts") {
+    if (intent.needs_topic || !intent.topic) {
+      return [
+        "Понял задачу, но не вижу конкретной темы публикации.",
+        "",
+        "Напиши, например:",
+        "Владимир, подготовь публикацию для LinkedIn компании и личного профиля про компенсацию реактивной мощности на промышленных объектах."
+      ].join("\n");
+    }
+
+    const targets = normalizeTargets(intent.targets);
+    const drafts = [];
+    for (const target of targets) {
+      drafts.push(await createDraftFromTopic(intent.topic, { ...context, target }));
+    }
+    return formatMultipleDrafts(drafts);
+  }
+
+  return "Не понял задачу. Можешь написать обычным языком: что подготовить, для какой соцсети и на какую тему.";
+}
+
+async function parseIntent(message, env) {
+  if (env.GEMINI_API_KEY) {
+    try {
+      const { parseNaturalIntent } = await import("./ai/gemini.js");
+      return normalizeIntent(await parseNaturalIntent(message, env));
+    } catch (error) {
+      console.log(JSON.stringify({ ok: false, job: "natural-intent", error: error.message }));
+    }
+  }
+
+  return heuristicIntent(message);
+}
+
+function normalizeIntent(intent) {
+  return {
+    intent: intent.intent || "unknown",
+    topic: String(intent.topic || "").trim(),
+    targets: Array.isArray(intent.targets) ? intent.targets : [],
+    needs_topic: Boolean(intent.needs_topic)
+  };
+}
+
+function heuristicIntent(message) {
+  const lower = message.toLowerCase();
+  if (lower.includes("статус") || lower.includes("status")) return { intent: "status", topic: "", targets: [], needs_topic: false };
+  if (lower.includes("отчет") || lower.includes("отчёт") || lower.includes("report")) return { intent: "report", topic: "", targets: [], needs_topic: false };
+  if (lower.includes("лид")) return { intent: "leads", topic: "", targets: [], needs_topic: false };
+  if (lower.includes("чернов") || lower.includes("публикац") || lower.includes("пост") || lower.includes("linkedin")) {
+    const targets = [];
+    if (lower.includes("личн") || lower.includes("персональн") || lower.includes("personal")) targets.push("linkedin_personal");
+    if (lower.includes("компан") || lower.includes("организац") || lower.includes("company") || lower.includes("ieccalc")) targets.push("linkedin_company");
+    const topic = extractTopicHeuristic(message);
+    return { intent: "create_drafts", topic, targets: targets.length ? targets : ["all"], needs_topic: !topic };
+  }
+  return { intent: "unknown", topic: "", targets: [], needs_topic: false };
+}
+
+function extractTopicHeuristic(message) {
+  const match = message.match(/(?:по теме|на тему|про|about)\s+(.+)$/i);
+  if (match) return cleanupTopic(match[1]);
+  return "";
+}
+
+function cleanupTopic(topic) {
+  return topic
+    .replace(/\b(?:через|прогоняй|прогони)\s+(?:ai|ии|al)\b.*$/i, "")
+    .replace(/[.。]+$/g, "")
+    .trim();
+}
+
+function normalizeTargets(targets) {
+  const valid = new Set(["linkedin_personal", "linkedin_company", "all"]);
+  const result = [...new Set((targets || []).filter((target) => valid.has(target)))];
+  if (result.includes("all")) return ["all"];
+  return result.length ? result : ["all"];
+}
+
+function formatMultipleDrafts(drafts) {
+  const lines = [`Prepared ${drafts.length} draft${drafts.length === 1 ? "" : "s"}.`];
+  for (const draft of drafts) {
+    lines.push(
+      "",
+      `Draft ${draft.id}`,
+      `Topic: ${draft.topic}`,
+      `Target: ${draft.target || "all"}`,
+      "",
+      draft.text,
+      "",
+      `Approve: /approve ${draft.id}`,
+      `Reject: /reject ${draft.id}`
+    );
+  }
+  return lines.join("\n");
 }

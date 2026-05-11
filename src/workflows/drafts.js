@@ -5,7 +5,7 @@ export async function createDraftFromTopic(topic, context) {
   const draft = {
     id: crypto.randomUUID().slice(0, 8),
     topic,
-    text: await generateDraftText(topic, context.env),
+    text: await generateDraftText(topic, context.env, null, context.target || "all"),
     status: "pending",
     target: context.target || "all",
     source: "telegram",
@@ -48,7 +48,7 @@ export async function createDraftFromFinding(finding, env) {
   const draft = {
     id: crypto.randomUUID().slice(0, 8),
     topic,
-    text: await generateDraftText(topic, env, finding),
+    text: await generateDraftText(topic, env, finding, finding.target || "all"),
     status: "pending",
     target: finding.target || "all",
     source: finding.url || "monitoring",
@@ -59,10 +59,10 @@ export async function createDraftFromFinding(finding, env) {
   return draft;
 }
 
-async function generateDraftText(topic, env, finding = null) {
+async function generateDraftText(topic, env, finding = null, target = "all") {
   if (env.GEMINI_API_KEY) {
     const { generatePostDraft } = await import("../ai/gemini.js");
-    return generatePostDraft({ topic, finding }, env);
+    return generatePostDraft({ topic, finding, target }, env);
   }
 
   if (env.OPENAI_API_KEY) {
