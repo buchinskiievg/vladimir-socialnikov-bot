@@ -26,11 +26,11 @@ export async function handleDialogue(message, context) {
   const explicitTopic = extractExplicitTopic(text);
 
   if (!newDraftRequest && looksLikeDraftRevision(text)) {
-    const response = await handleDraftRevision(text, { ...context, fastMemory, chatId });
-    const assistantMessage = { chatId, userId: "bot", role: "assistant", text: responseToMemoryText(response), createdAt: new Date().toISOString() };
-    await appendChatMessage(env, assistantMessage);
-    await archiveMessageToSlowMemory(env, assistantMessage);
-    return response;
+    return rememberAndReturn(
+      env,
+      chatId,
+      await handleDraftRevision(text, { ...context, fastMemory, chatId })
+    );
   }
 
   if (newDraftRequest && !explicitTopic) {
@@ -43,24 +43,40 @@ export async function handleDialogue(message, context) {
       pendingTargets: targets,
       pendingTopicHint: ""
     });
-
-    const response = "Понял. Для каких тем готовим публикации?";
-    const assistantMessage = { chatId, userId: "bot", role: "assistant", text: response, createdAt: new Date().toISOString() };
-    await appendChatMessage(env, assistantMessage);
-    await archiveMessageToSlowMemory(env, assistantMessage);
-    return response;
+    return rememberAndReturn(env, chatId, "Понял. Для каких тем готовим публикации?");
   }
 
-  const effectiveMemory = newDraftRequest
-    ? { ...fastMemory, pendingIntent: "", pendingTargets: [], pendingTopicHint: "" }
-    : fastMemory;
-  const turn = await parseTurnWithFallback({ message: text, fastMemory: effectiveMemory, recentMessages }, env);
-  const response = await executeDialogueTurn(turn, { ...context, message, fastMemory: effectiveMemory });
+  if (newDraftRequest && explicitTopic) {
+    const turn = {
+      intent: "create_drafts",
+      topic: explicitTopic,
+      targets: inferTargets(text)
+    };
+    return rememberAndReturn(
+      env,
+      chatId,
+      await executeDialogueTurn(turn, {
+        ...context,
+        message,
+        fastMemory: { ...fastMemory, pendingIntent: "", pendingTargets: [], pendingTopicHint: "" }
+      })
+    );
+  }
 
-  const assistantMessage = { chatId, userId: "bot", role: "assistant", text: responseToMemoryText(response), createdAt: new Date().toISOString() };
+  const turn = await parseTurnWithFallback({ message: text, fastMemory, recentMessages }, env);
+  return rememberAndReturn(env, chatId, await executeDialogueTurn(turn, { ...context, message, fastMemory }));
+}
+
+async function rememberAndReturn(env, chatId, response) {
+  const assistantMessage = {
+    chatId,
+    userId: "bot",
+    role: "assistant",
+    text: responseToMemoryText(response),
+    createdAt: new Date().toISOString()
+  };
   await appendChatMessage(env, assistantMessage);
   await archiveMessageToSlowMemory(env, assistantMessage);
-
   return response;
 }
 
@@ -79,10 +95,11 @@ function fallbackDialogueTurn(message, fastMemory) {
   if (lower.includes("статус") || lower.includes("status")) return { intent: "status" };
   if (lower.includes("отчет") || lower.includes("отчёт") || lower.includes("report")) return { intent: "report" };
   if (lower.includes("лид") || lower.includes("lead")) return { intent: "leads" };
+  if (lower.includes("проверк") || lower.includes("pending")) return { intent: "pending" };
   if (fastMemory?.pendingIntent === "create_drafts") {
     return { intent: "provide_topic", topic: text, targets: fastMemory.pendingTargets || ["all"] };
   }
-  if (startsNewDraftRequest(text) || lower.includes("linkedin") || lower.includes("facebook") || lower.includes("instagram") || lower.includes("threads") || lower.includes("reddit")) {
+  if (startsNewDraftRequest(text) || mentionsPlatform(text)) {
     return {
       intent: "create_drafts",
       topic: extractExplicitTopic(text) || cleanupFallbackTopic(text),
@@ -92,22 +109,13 @@ function fallbackDialogueTurn(message, fastMemory) {
   return { intent: "chat", reply: "Я на связи. Можешь попросить подготовить пост, показать отчет, лиды или посты на проверку." };
 }
 
-function cleanupFallbackTopic(text) {
-  return String(text || "")
-    .replace(/^.*?(?:про|about)\s+/i, "")
-    .replace(/\b(?:пока|ничего|не|публикуй|опубликовывай).*$/i, "")
-    .replace(/\bwith a .*$/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 async function executeDialogueTurn(turn, context) {
   const env = context.env;
   const chatId = context.message.chat.id;
   const fastMemory = context.fastMemory;
 
   if (turn.intent === "create_drafts") {
-    const topic = (turn.topic || "").trim();
+    const topic = cleanupFallbackTopic(turn.topic || "");
     const targets = overrideTargetsFromText(context.message.text, normalizeTargets(turn.targets));
 
     if (!topic) {
@@ -131,7 +139,7 @@ async function executeDialogueTurn(turn, context) {
   }
 
   if (turn.intent === "provide_topic" && fastMemory.pendingIntent === "create_drafts") {
-    const topic = (turn.topic || context.message.text || "").trim();
+    const topic = cleanupFallbackTopic(turn.topic || context.message.text || "");
     const targets = overrideTargetsFromText(context.message.text, normalizeTargets(fastMemory.pendingTargets));
     const drafts = [];
     for (const target of targets) {
@@ -149,21 +157,8 @@ async function executeDialogueTurn(turn, context) {
   return turn.reply || "Я на связи. Можешь попросить подготовить публикацию, показать отчет, лиды или посты на проверку.";
 }
 
-async function clearPending(env, fastMemory, chatId) {
-  await writeFastMemory(env, {
-    ...fastMemory,
-    chatId,
-    updatedAt: new Date().toISOString(),
-    pendingIntent: "",
-    pendingTargets: [],
-    pendingTopicHint: ""
-  });
-}
-
 async function rememberDrafts(env, fastMemory, chatId, drafts) {
   const existingSummary = readSummary(fastMemory);
-  const recentDraftIds = drafts.map((draft) => draft.id);
-  const recentDraftTargets = drafts.map((draft) => draft.target || "all");
   await writeFastMemory(env, {
     ...fastMemory,
     chatId,
@@ -173,8 +168,8 @@ async function rememberDrafts(env, fastMemory, chatId, drafts) {
     pendingTopicHint: "",
     summary: JSON.stringify({
       ...existingSummary,
-      recentDraftIds,
-      recentDraftTargets,
+      recentDraftIds: drafts.map((draft) => draft.id),
+      recentDraftTargets: drafts.map((draft) => draft.target || "all"),
       recentDraftTopic: drafts[0]?.topic || ""
     })
   });
@@ -244,6 +239,7 @@ function looksLikeDraftRevision(text) {
     "меньше продаж",
     "смени тему",
     "замени тему",
+    "поменяй тему",
     "переведи",
     "translate",
     "rewrite",
@@ -254,6 +250,43 @@ function looksLikeDraftRevision(text) {
   ].some((marker) => lower.includes(marker));
 }
 
+function startsNewDraftRequest(text) {
+  const lower = String(text || "").toLowerCase();
+  return [
+    "подготов",
+    "сделай пост",
+    "сделай публикац",
+    "напиши пост",
+    "напиши публикац",
+    "пост для",
+    "публикац",
+    "draft",
+    "prepare",
+    "write a post"
+  ].some((marker) => lower.includes(marker));
+}
+
+function extractExplicitTopic(text) {
+  const match = String(text || "").match(/(?:по теме|на тему|про|about)\s*[-:—]?\s*(.+)$/i);
+  const topic = match?.[1]?.trim() || "";
+  return topic.length >= 4 ? cleanupFallbackTopic(topic) : "";
+}
+
+function cleanupFallbackTopic(text) {
+  return String(text || "")
+    .replace(/^.*?(?:по теме|на тему|про|about)\s*[-:—]?\s*/i, "")
+    .replace(/\b(?:пока|ничего|не|публикуй|опубликовывай).*$/i, "")
+    .replace(/\bwith a .*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractChangedTopic(text) {
+  const match = String(text || "").match(/(?:смени|замени|поменяй)\s+тему\s+(?:на|про|о)\s+(.+)$/i);
+  const topic = match?.[1]?.trim() || "";
+  return topic.length >= 8 ? cleanupFallbackTopic(topic) : "";
+}
+
 function extractDraftIds(text) {
   const ids = [];
   const matches = String(text || "").matchAll(/\b(?:draft|черновик)?\s*([a-f0-9]{8})\b/gi);
@@ -261,18 +294,30 @@ function extractDraftIds(text) {
   return [...new Set(ids)];
 }
 
-function extractChangedTopic(text) {
-  const match = String(text || "").match(/(?:смени|замени|поменяй)\s+тему\s+(?:на|про|о)\s+(.+)$/i);
-  const topic = match?.[1]?.trim() || "";
-  return topic.length >= 8 ? topic : "";
+function mentionsPlatform(text) {
+  const lower = String(text || "").toLowerCase();
+  return ["linkedin", "линкедин", "facebook", "фейсбук", "instagram", "инстаграм", "threads", "reddit"].some((item) => lower.includes(item));
 }
 
-function readSummary(fastMemory) {
-  try {
-    return JSON.parse(fastMemory?.summary || "{}");
-  } catch {
-    return {};
+function inferTargets(text) {
+  const lower = String(text || "").toLowerCase();
+  const targets = [];
+  const mentionsLinkedIn = lower.includes("linkedin") || lower.includes("линкедин") || lower.includes("linked in");
+
+  if (mentionsLinkedIn) {
+    const wantsCompany = lower.includes("компани") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company") || lower.includes("ieccalc");
+    const wantsPersonal = lower.includes("личн") || lower.includes("персонал") || lower.includes("personal");
+    if (wantsCompany) targets.push("linkedin_company");
+    if (wantsPersonal) targets.push("linkedin_personal");
+    if (!wantsCompany && !wantsPersonal) targets.push("linkedin_personal", "linkedin_company");
   }
+
+  if (lower.includes("facebook") || lower.includes("фейсбук")) targets.push("facebook");
+  if (lower.includes("instagram") || lower.includes("инстаграм")) targets.push("instagram");
+  if (lower.includes("threads")) targets.push("threads");
+  if (lower.includes("reddit")) targets.push("reddit");
+
+  return targets.length ? [...new Set(targets)] : ["all"];
 }
 
 function normalizeTargets(targets) {
@@ -283,49 +328,38 @@ function normalizeTargets(targets) {
 }
 
 function overrideTargetsFromText(text, targets) {
-  const lower = String(text || "").toLowerCase();
-  const explicit = [];
-  if (lower.includes("facebook") || lower.includes("фейсбук")) explicit.push("facebook");
-  if (lower.includes("instagram") || lower.includes("инстаграм")) explicit.push("instagram");
-  if (lower.includes("threads")) explicit.push("threads");
-  if (lower.includes("reddit")) explicit.push("reddit");
-  const mentionsLinkedIn = lower.includes("linkedin") || lower.includes("линкедин") || lower.includes("linked in");
-  const companyOnly = mentionsLinkedIn
-    && (lower.includes("компани") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company"))
-    && !(lower.includes("личн") || lower.includes("персонал") || lower.includes("personal"));
-  const personalOnly = mentionsLinkedIn
-    && (lower.includes("личн") || lower.includes("персонал") || lower.includes("personal"))
-    && !(lower.includes("компани") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company"));
-
-  if (companyOnly) return ["linkedin_company"];
-  if (personalOnly) return ["linkedin_personal"];
-  if (explicit.length) return [...new Set(explicit)];
+  const inferred = inferTargets(text);
+  if (inferred.length && !(inferred.length === 1 && inferred[0] === "all")) return inferred;
   return targets;
 }
 
 function formatDrafts(drafts) {
   return {
-    messages: [
-      ...drafts.map((draft) => ({
-        text: draft.text,
-        options: {
-          photoUrl: draft.imageUrl || undefined,
-          reply_markup: {
-            inline_keyboard: draftButtons(draft.id)
-          }
+    messages: drafts.map((draft) => ({
+      text: draft.text,
+      options: {
+        photoUrl: draft.imageUrl || undefined,
+        reply_markup: {
+          inline_keyboard: draftButtons(draft.id)
         }
-      }))
-    ]
+      }
+    }))
   };
 }
 
 function draftButtons(id) {
-  return [
-    [
-      { text: "Approve", callback_data: `approve:${id}` },
-      { text: "Reject", callback_data: `reject:${id}` }
-    ]
-  ];
+  return [[
+    { text: "Approve", callback_data: `approve:${id}` },
+    { text: "Reject", callback_data: `reject:${id}` }
+  ]];
+}
+
+function readSummary(fastMemory) {
+  try {
+    return JSON.parse(fastMemory?.summary || "{}");
+  } catch {
+    return {};
+  }
 }
 
 function responseToMemoryText(response) {
@@ -338,38 +372,6 @@ function responseToMemoryText(response) {
       .join("\n\n");
   }
   return JSON.stringify(response || "");
-}
-
-function startsNewDraftRequest(text) {
-  const lower = String(text || "").toLowerCase();
-  return [
-    "подготов",
-    "сделай пост",
-    "сделай публикац",
-    "напиши пост",
-    "draft",
-    "prepare",
-    "write a post"
-  ].some((marker) => lower.includes(marker));
-}
-
-function extractExplicitTopic(text) {
-  const match = String(text || "").match(/(?:по теме|на тему|про|about)\s+(.+)$/i);
-  const topic = match?.[1]?.trim() || "";
-  return topic.length >= 8 ? cleanupFallbackTopic(topic) : "";
-}
-
-function inferTargets(text) {
-  const lower = String(text || "").toLowerCase();
-  const targets = [];
-  if (lower.includes("личн") || lower.includes("персонал") || lower.includes("personal")) targets.push("linkedin_personal");
-  if (lower.includes("компани") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company") || lower.includes("ieccalc")) targets.push("linkedin_company");
-  if (lower.includes("facebook") || lower.includes("фейсбук")) targets.push("facebook");
-  if (lower.includes("instagram") || lower.includes("инстаграм")) targets.push("instagram");
-  if (lower.includes("threads")) targets.push("threads");
-  if (lower.includes("reddit")) targets.push("reddit");
-  if (!targets.length && lower.includes("linkedin")) return ["all"];
-  return targets.length ? [...new Set(targets)] : ["all"];
 }
 
 export async function resetDialogue(env, chatId) {
