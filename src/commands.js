@@ -162,7 +162,9 @@ function buildStatus(env) {
     ["LinkedIn", Boolean(env.LINKEDIN_ACCESS_TOKEN)],
     ["Reddit", Boolean(env.REDDIT_CLIENT_ID)],
     ["Facebook", Boolean(env.FACEBOOK_PAGE_ACCESS_TOKEN)],
+    ["Facebook via Composio", Boolean(env.COMPOSIO_API_KEY && env.COMPOSIO_FACEBOOK_ACCOUNT_ID && env.COMPOSIO_FACEBOOK_PAGE_ID)],
     ["Instagram", Boolean(env.INSTAGRAM_ACCESS_TOKEN)],
+    ["Instagram via Composio", Boolean(env.COMPOSIO_API_KEY && env.COMPOSIO_INSTAGRAM_ACCOUNT_ID && env.COMPOSIO_INSTAGRAM_USER_ID)],
     ["Threads", Boolean(env.THREADS_ACCESS_TOKEN)]
   ];
 
