@@ -23,6 +23,25 @@ export async function sendTelegramMessage(env, chatId, text, options = {}) {
   return sendTelegramText(env, chatId, text, options);
 }
 
+export async function sendTelegramAction(env, chatId, action = "typing") {
+  const token = env.TELEGRAM_BOT_TOKEN;
+  if (!token) throw new Error("Missing TELEGRAM_BOT_TOKEN");
+
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendChatAction`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      action
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.log(JSON.stringify({ ok: false, job: "telegram-send-action", chatId, error: body }));
+  }
+}
+
 async function sendTelegramText(env, chatId, text, options = {}) {
   const token = env.TELEGRAM_BOT_TOKEN;
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {

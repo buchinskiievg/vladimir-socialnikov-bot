@@ -1,6 +1,6 @@
 import { routeCommand } from "./commands.js";
 import { approveDraft, rejectDraft } from "./workflows/drafts.js";
-import { sendTelegramMessage } from "./telegram-api.js";
+import { sendTelegramAction, sendTelegramMessage } from "./telegram-api.js";
 
 export async function handleTelegramWebhook(request, env, ctx) {
   if (!isValidWebhookSecret(request, env)) {
@@ -32,6 +32,12 @@ export async function handleTelegramWebhook(request, env, ctx) {
 async function handleTelegramMessageAsync(message, context) {
   try {
     const text = message.text || "";
+    const acknowledgement = buildAcknowledgement(text);
+    if (acknowledgement) {
+      await sendTelegramMessage(context.env, message.chat.id, acknowledgement);
+      await sendTelegramAction(context.env, message.chat.id, "typing");
+    }
+
     const reply = await routeCommand(text, { ...context, message });
     const replies = Array.isArray(reply?.messages) ? reply.messages : [reply];
     for (const item of replies) {
@@ -69,6 +75,33 @@ async function handleCallbackQuery(callbackQuery, env, ctx) {
   ctx.waitUntil(answerCallbackQuery(env, callbackQuery.id, result.ok ? "Done" : "Failed"));
   ctx.waitUntil(sendTelegramMessage(env, chatId, result.message));
   return Response.json({ ok: true });
+}
+
+function buildAcknowledgement(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed || trimmed.startsWith("/")) return "";
+
+  const lower = trimmed.toLowerCase();
+  if (includesAny(lower, ["пост", "публикац", "linkedin", "facebook", "instagram", "threads", "reddit", "линкедин", "фейсбук", "инстаграм"])) {
+    return "Понял, готовлю пост и материал для согласования.";
+  }
+  if (includesAny(lower, ["проверк", "pending", "на согласован", "на проверку"])) {
+    return "Понял, сейчас покажу материалы на проверку.";
+  }
+  if (includesAny(lower, ["отчет", "отчёт", "report"])) {
+    return "Понял, собираю отчет.";
+  }
+  if (includesAny(lower, ["лид", "lead"])) {
+    return "Понял, проверяю лиды.";
+  }
+  if (includesAny(lower, ["статус", "status"])) {
+    return "Понял, проверяю статус.";
+  }
+  return "Принял сообщение, сейчас разберу.";
+}
+
+function includesAny(text, markers) {
+  return markers.some((marker) => text.includes(marker));
 }
 
 async function answerCallbackQuery(env, callbackQueryId, text) {
