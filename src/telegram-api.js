@@ -42,6 +42,27 @@ export async function sendTelegramAction(env, chatId, action = "typing") {
   }
 }
 
+export async function sendTelegramReaction(env, chatId, messageId, emoji = "\u{1F44D}") {
+  const token = env.TELEGRAM_BOT_TOKEN;
+  if (!token || !messageId) return;
+
+  const response = await fetch(`https://api.telegram.org/bot${token}/setMessageReaction`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      reaction: [{ type: "emoji", emoji }],
+      is_big: false
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.log(JSON.stringify({ ok: false, job: "telegram-set-reaction", chatId, messageId, error: body }));
+  }
+}
+
 async function sendTelegramText(env, chatId, text, options = {}) {
   const token = env.TELEGRAM_BOT_TOKEN;
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
