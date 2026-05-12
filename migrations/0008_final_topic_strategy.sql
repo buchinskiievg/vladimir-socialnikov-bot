@@ -1,0 +1,53 @@
+delete from platform_topic_preferences;
+
+insert into platform_topic_preferences (id, platform, topic, status, weight, notes, created_at, updated_at) values
+('linkedin-1','linkedin','major 330-750 kV substations, EHV transmission lines, HVDC converter stations, and grid expansion projects','active',1.45,'final baseline topic',datetime('now'),datetime('now')),
+('linkedin-2','linkedin','new high-voltage equipment from Hitachi Energy, Siemens Energy, ABB, GE Vernova, Schneider Electric, and other OEMs','active',1.4,'final baseline topic',datetime('now'),datetime('now')),
+('linkedin-3','linkedin','SF6-free GIS, EHV circuit breakers, large power transformers, digital substations, and protection equipment','active',1.35,'final baseline topic',datetime('now'),datetime('now')),
+('linkedin-4','linkedin','ETAP, DIgSILENT PowerFactory, SKM, EasyPower, CYME, PSS/E, PSCAD, NEPLAN professional workflows','active',1.3,'final baseline topic',datetime('now'),datetime('now')),
+('linkedin-5','linkedin','software-assisted studies: load flow, short circuit, arc flash, protection coordination, harmonics, power quality','active',1.25,'final baseline topic',datetime('now'),datetime('now')),
+('linkedin-6','linkedin','IEC and IEEE standards in practical substation, protection, grounding, and equipment design','active',1.2,'final baseline topic',datetime('now'),datetime('now')),
+('linkedin-7','linkedin','substation design mistakes, lessons learned, commissioning issues, and field-proven design checks','active',1.15,'final baseline topic',datetime('now'),datetime('now')),
+('linkedin-8','linkedin','capacitor bank sizing, harmonic resonance, detuned filters, and reactive power compensation','active',1.1,'final baseline topic',datetime('now'),datetime('now')),
+('linkedin-9','linkedin','engineering calculators, automation, templates, and repeatable design checks that reduce study errors','active',1.05,'final baseline topic',datetime('now'),datetime('now')),
+('linkedin-10','linkedin','solar PV grid connection, BESS interconnection, utility requirements, and hybrid plant studies','active',0.85,'final baseline topic',datetime('now'),datetime('now')),
+
+('facebook-1','facebook','electrical engineering software reviews, tutorials, feature comparisons, and practical workflows','active',1.35,'final baseline topic',datetime('now'),datetime('now')),
+('facebook-2','facebook','ETAP, DIgSILENT PowerFactory, SKM, EasyPower, CYME, PSS/E, PSCAD, NEPLAN, PVsyst, HelioScope workflows','active',1.3,'final baseline topic',datetime('now'),datetime('now')),
+('facebook-3','facebook','power system studies software: load flow, short circuit, arc flash, protection coordination, harmonics, power quality','active',1.25,'final baseline topic',datetime('now'),datetime('now')),
+('facebook-4','facebook','calculator and template recommendations for electrical design, substation studies, and solar interconnection','active',1.2,'final baseline topic',datetime('now'),datetime('now')),
+('facebook-5','facebook','solar installer, C&I solar, BESS, off-grid, inverter, battery, and utility interconnection pain points','active',1.0,'final baseline topic',datetime('now'),datetime('now')),
+('facebook-6','facebook','equipment selection: transformers, switchgear, protection relays, inverters, batteries, panels, capacitor banks','active',1.0,'final baseline topic',datetime('now'),datetime('now')),
+('facebook-7','facebook','local code, permitting, utility approval, grid connection documentation, and design help leads','active',0.95,'final baseline topic',datetime('now'),datetime('now')),
+('facebook-8','facebook','cost, payback, reliability, equipment failures, and real project lessons','active',0.9,'final baseline topic',datetime('now'),datetime('now')),
+
+('instagram-1','instagram','visual engineering explainers for substations, protection, grounding, capacitor banks, and grid studies','active',1.25,'final baseline topic',datetime('now'),datetime('now')),
+('instagram-2','instagram','before/after design checks, calculation snapshots, and engineering workflow diagrams','active',1.2,'final baseline topic',datetime('now'),datetime('now')),
+('instagram-3','instagram','330-750 kV substations, GIS, transformers, circuit breakers, HVDC, and digital substation visuals','active',1.2,'final baseline topic',datetime('now'),datetime('now')),
+('instagram-4','instagram','ETAP, DIgSILENT PowerFactory, SKM, EasyPower, CYME, PSS/E workflow snapshots and software tips','active',1.15,'final baseline topic',datetime('now'),datetime('now')),
+('instagram-5','instagram','solar PV, BESS, grid connection, and inverter study visuals','active',1.0,'final baseline topic',datetime('now'),datetime('now')),
+('instagram-6','instagram','IECCalc product visuals, calculator use cases, and short standards explainers','active',0.95,'final baseline topic',datetime('now'),datetime('now')),
+
+('threads-1','threads','short technical opinions on power engineering news, grid construction, OEM launches, and standards','active',1.25,'final baseline topic',datetime('now'),datetime('now')),
+('threads-2','threads','quick practical tips for substation, protection, grounding, capacitor bank, and software workflows','active',1.15,'final baseline topic',datetime('now'),datetime('now')),
+('threads-3','threads','myths and mistakes in reactive power, harmonics, PV, BESS, grounding, and protection coordination','active',1.1,'final baseline topic',datetime('now'),datetime('now')),
+('threads-4','threads','questions that invite engineer discussion and field experience','active',1.05,'final baseline topic',datetime('now'),datetime('now')),
+('threads-5','threads','commentary on 330-750 kV projects, HVDC, SF6-free GIS, transformers, and digital substations','active',1.15,'final baseline topic',datetime('now'),datetime('now')),
+('threads-6','threads','lightweight IECCalc product updates and calculator-based engineering insights','active',0.9,'final baseline topic',datetime('now'),datetime('now')),
+
+('reddit-1','reddit','how-to questions from electrical engineers about power systems, substations, protection, grounding, and studies','active',1.25,'final baseline topic',datetime('now'),datetime('now')),
+('reddit-2','reddit','troubleshooting transformers, switchgear, relays, grounding, harmonics, capacitor banks, and power quality','active',1.2,'final baseline topic',datetime('now'),datetime('now')),
+('reddit-3','reddit','software and tool recommendations: ETAP, DIgSILENT PowerFactory, SKM, EasyPower, CYME, PSS/E, PSCAD','active',1.2,'final baseline topic',datetime('now'),datetime('now')),
+('reddit-4','reddit','standards interpretation: IEC, IEEE, NEC, local grid codes, utility interconnection requirements','active',1.1,'final baseline topic',datetime('now'),datetime('now')),
+('reddit-5','reddit','field experience, commissioning lessons, failures, outages, and practical design mistakes','active',1.05,'final baseline topic',datetime('now'),datetime('now')),
+('reddit-6','reddit','solar PV, BESS, inverters, grid-tie issues, and utility approval pain points','active',0.9,'final baseline topic',datetime('now'),datetime('now')),
+
+('forums-1','forums','detailed troubleshooting and design questions from engineers, contractors, utilities, and plant owners','active',1.25,'final baseline topic',datetime('now'),datetime('now')),
+('forums-2','forums','substation, transformer, switchgear, grounding, protection, relay coordination, and commissioning cases','active',1.3,'final baseline topic',datetime('now'),datetime('now')),
+('forums-3','forums','330-750 kV transmission, substation construction, HVDC, GIS, transformers, and EHV equipment','active',1.35,'final baseline topic',datetime('now'),datetime('now')),
+('forums-4','forums','high-voltage OEM equipment news from Hitachi Energy, Siemens Energy, ABB, GE Vernova, Schneider Electric, and Alstom Grid','active',1.3,'final baseline topic',datetime('now'),datetime('now')),
+('forums-5','forums','ETAP, DIgSILENT PowerFactory, SKM, EasyPower, CYME, PSS/E, PSCAD, NEPLAN software questions','active',1.2,'final baseline topic',datetime('now'),datetime('now')),
+('forums-6','forums','standards and calculation interpretation questions: IEC, IEEE, NEC, grid codes, utility specs','active',1.15,'final baseline topic',datetime('now'),datetime('now')),
+('forums-7','forums','equipment failures, harmonics, resonance, capacitor banks, power quality, and arc flash','active',1.15,'final baseline topic',datetime('now'),datetime('now')),
+('forums-8','forums','regional solar PV, BESS, grid connection, permitting, and utility approval problems','active',0.95,'final baseline topic',datetime('now'),datetime('now')),
+('forums-9','forums','requests for design software, calculators, templates, studies, and consultant help','active',1.0,'final baseline topic',datetime('now'),datetime('now'));

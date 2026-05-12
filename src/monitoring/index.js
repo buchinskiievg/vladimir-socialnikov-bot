@@ -141,14 +141,16 @@ function formatDraft(draft) {
       `Post ${draft.id} - ready for approval`,
       `Topic: ${compactTopic(draft.topic)}`,
       `Target: ${draft.target || "all"}`,
+      draft.imageUrl ? `Image: ${draft.imageUrl}` : null,
       "",
       draft.text,
       "",
       `Approve: /approve ${draft.id}`,
       `Reject: /reject ${draft.id}`
-    ].join("\n").slice(0, 3900),
+    ].filter((line) => line !== null).join("\n").slice(0, 3900),
     options: {
       parse_mode: undefined,
+      photoUrl: draft.imageUrl || undefined,
       reply_markup: {
         inline_keyboard: [
           [

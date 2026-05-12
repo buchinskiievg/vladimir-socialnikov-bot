@@ -1,4 +1,4 @@
-import { PLATFORM_TOPICS } from "../topic-strategy.js";
+import { FINAL_TOPIC_WEIGHTS, PLATFORM_TOPICS } from "../topic-strategy.js";
 
 const memoryTopics = new Map();
 
@@ -100,8 +100,8 @@ function defaultRows(status) {
         platform,
         topic,
         status,
-        weight: 1,
-        notes: "default proposal",
+        weight: FINAL_TOPIC_WEIGHTS[platform]?.[index] || 1,
+        notes: "final baseline topic",
         createdAt: new Date().toISOString(),
         updatedAt: ""
       });

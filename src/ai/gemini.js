@@ -8,6 +8,7 @@ export async function generatePostDraft({ topic, finding, target }, env) {
     : target === "linkedin_company"
       ? "Write as an IECCalc company page post. Use a product/engineering brand voice and connect the topic to useful engineering calculation workflows when natural."
       : "Write as a professional LinkedIn-style post.";
+  const seo = seoGuidance(target);
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -32,6 +33,7 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               `Topic: ${topic}`,
               `Target: ${target || "general"}`,
               `Audience: ${audience}`,
+              `SEO guidance: ${seo}`,
               "",
               source,
               "",
@@ -41,8 +43,10 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               "2. Three short technical points.",
               "3. Practical takeaway.",
               "4. One discussion question.",
+              "5. End with 3-6 relevant professional hashtags.",
               "",
-              "Do not write 'Option', 'Here are', 'choose', or any meta commentary."
+              "Naturally include search phrases engineers might use, such as standard numbers, voltage levels, software names, equipment names, or calculation terms when relevant.",
+              "Do not keyword-stuff. Do not use more than 6 hashtags. Do not write 'SEO', 'keywords', 'Option', 'Here are', 'choose', or any meta commentary."
             ].join("\n")
           }]
         }],
@@ -65,6 +69,27 @@ export async function generatePostDraft({ topic, finding, target }, env) {
     .trim();
 
   return text || fallbackDraft(topic, finding, "empty model output");
+}
+
+function seoGuidance(target) {
+  if (target === "linkedin_company") {
+    return [
+      "Prefer searchable product/engineering phrases for IECCalc: electrical engineering calculations, IEC calculator, power system studies, capacitor bank sizing, short circuit calculation, protection coordination, load flow study.",
+      "When natural, include one soft website-oriented phrase such as 'engineering calculator workflow' or 'repeatable design check'."
+    ].join(" ");
+  }
+
+  if (target === "linkedin_personal") {
+    return [
+      "Prefer searchable professional phrases: substation design, power system studies, IEC standards, ETAP, DIgSILENT PowerFactory, protection coordination, reactive power compensation, HVDC, GIS, transformer, switchgear.",
+      "Keep the voice human and expert, not promotional."
+    ].join(" ");
+  }
+
+  return [
+    "Use searchable engineering terms: substation design, power system studies, IEC standards, ETAP, DIgSILENT PowerFactory, short circuit, load flow, arc flash, protection coordination, capacitor bank sizing, HVDC, GIS, transformer, switchgear, solar PV, BESS.",
+    "Add only relevant hashtags."
+  ].join(" ");
 }
 
 export async function parseNaturalIntent(message, env) {
