@@ -8,7 +8,11 @@ export async function sendTelegramMessage(env, chatId, text, options = {}) {
     const { photoUrl: _photoUrl, ...messageOptions } = options;
     await sendTelegramText(env, chatId, text, messageOptions);
     try {
-      await sendTelegramPhoto(env, chatId, options.photoUrl, "");
+      if (String(options.photoUrl).toLowerCase().includes(".svg")) {
+        await sendTelegramDocument(env, chatId, options.photoUrl, "");
+      } else {
+        await sendTelegramPhoto(env, chatId, options.photoUrl, "");
+      }
     } catch (error) {
       console.log(JSON.stringify({ ok: false, job: "telegram-send-photo", chatId, error: error.message }));
       await sendTelegramText(env, chatId, `Image: ${options.photoUrl}`, {});
@@ -58,4 +62,24 @@ async function sendTelegramPhoto(env, chatId, photoUrl, caption) {
   }
   const body = await response.json();
   console.log(JSON.stringify({ ok: true, job: "telegram-send-photo", chatId, messageId: body.result?.message_id || null }));
+}
+
+async function sendTelegramDocument(env, chatId, documentUrl, caption) {
+  const token = env.TELEGRAM_BOT_TOKEN;
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      document: documentUrl,
+      caption: String(caption || "").slice(0, 1024)
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Telegram sendDocument failed: ${response.status} ${body}`);
+  }
+  const body = await response.json();
+  console.log(JSON.stringify({ ok: true, job: "telegram-send-document", chatId, messageId: body.result?.message_id || null }));
 }

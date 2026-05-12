@@ -309,7 +309,7 @@ function inferTargets(text) {
     const wantsPersonal = lower.includes("личн") || lower.includes("персонал") || lower.includes("personal");
     if (wantsCompany) targets.push("linkedin_company");
     if (wantsPersonal) targets.push("linkedin_personal");
-    if (!wantsCompany && !wantsPersonal) targets.push("linkedin_personal", "linkedin_company");
+    if (!wantsCompany && !wantsPersonal) targets.push("linkedin_personal");
   }
 
   if (lower.includes("facebook") || lower.includes("фейсбук")) targets.push("facebook");

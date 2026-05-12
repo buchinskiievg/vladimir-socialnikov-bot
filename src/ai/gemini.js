@@ -83,6 +83,9 @@ function ensurePlatformLength(text, { topic, target }) {
 
   const needsLinkedIn = target === "linkedin_company" || target === "linkedin_personal";
   if (!needsLinkedIn) return text;
+  if (isRenewableComparisonTopic(topic)) {
+    return `${text.trim()}\n${renewableComparisonChecklist(target)}`;
+  }
 
   const addition = [
     "",
@@ -448,6 +451,10 @@ function fallbackDraft(topic, finding, _reason, target = "all") {
   const cleanTopic = String(topic || "high-voltage power system engineering").replace(/\s+/g, " ").trim();
   const sourceLine = finding?.url ? `\nReference: ${finding.url}` : "";
 
+  if (isRenewableComparisonTopic(cleanTopic)) {
+    return ensurePlatformLength(renewableComparisonPost(target, sourceLine), { topic: cleanTopic, target });
+  }
+
   if (target === "threads") {
     return `500 kV GIS projects are rarely limited by one calculation. The real risk is integration: IEC 61850 signals, protection zones, interlocks, SCADA mapping, and field test evidence all have to match the actual substation.`;
   }
@@ -509,4 +516,49 @@ function fallbackDraft(topic, finding, _reason, target = "all") {
     "",
     "#PowerEngineering #DigitalSubstation #GIS #IEC61850 #ProtectionCoordination"
   ].filter(Boolean).join("\n");
+}
+
+function isRenewableComparisonTopic(topic) {
+  const lower = String(topic || "").toLowerCase();
+  return (lower.includes("солнеч") || lower.includes("solar"))
+    && (lower.includes("ветр") || lower.includes("wind"));
+}
+
+function renewableComparisonPost(target, sourceLine = "") {
+  const companyVoice = target === "linkedin_company";
+  return [
+    "Solar or wind generation: the better choice depends less on the technology itself and more on the power system around it.",
+    "",
+    "For engineers, the comparison should start with the grid connection point, load profile, site conditions, and dispatch requirements rather than with the headline capacity in MW.",
+    "",
+    "* Solar PV is usually more predictable during daylight hours, easier to modularize, and often faster to deploy. Its main engineering challenges are evening ramps, voltage control on weak grids, inverter behavior during faults, and the need for storage or flexible generation when production falls after sunset.",
+    "* Wind generation can deliver strong output during evening or night periods and may complement solar well in some regions. The tradeoff is higher variability, more demanding mechanical maintenance, complex site assessment, and stronger dependence on local wind resource quality.",
+    "* From a grid studies perspective, both technologies require serious attention to load flow, short-circuit contribution, protection coordination, harmonic performance, reactive power capability, and grid code compliance.",
+    "* The strongest projects often combine solar, wind, BESS, and conventional grid reinforcement instead of treating one renewable source as a universal answer.",
+    "",
+    companyVoice
+      ? "For IECCalc-style engineering workflows, the practical question is not 'solar or wind?' but 'what studies prove that this generation mix can operate reliably at the actual point of interconnection?'"
+      : "My practical view: solar is often simpler to develop, wind can be more valuable when its production profile matches system demand, and the best answer usually appears only after proper grid studies.",
+    sourceLine,
+    "",
+    "Which factor usually decides the choice in your projects: resource quality, grid capacity, storage cost, permitting, or power purchase conditions?",
+    "",
+    "#RenewableEnergy #PowerSystems #SolarPV #WindPower #GridIntegration"
+  ].filter(Boolean).join("\n");
+}
+
+function renewableComparisonChecklist(target) {
+  const companyVoice = target === "linkedin_company";
+  return [
+    "",
+    "A practical comparison checklist:",
+    "",
+    "* Match the generation profile against the local demand curve, not only annual energy yield.",
+    "* Check available grid capacity, voltage regulation limits, and reactive power requirements at the point of interconnection.",
+    "* Model inverter behavior, fault ride-through, harmonics, and protection settings before assuming the connection is straightforward.",
+    "* Compare storage needs, curtailment risk, land use, maintenance access, and seasonal resource variation.",
+    companyVoice
+      ? "* Use repeatable calculation workflows so early commercial assumptions can be tested against real electrical constraints."
+      : "* Keep the engineering decision separate from the marketing narrative; the grid usually tells the truth first."
+  ].join("\n");
 }

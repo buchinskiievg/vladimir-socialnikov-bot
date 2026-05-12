@@ -1,12 +1,25 @@
 export async function generateInfographicForPost({ id, topic, text, target }, env) {
   if (env.GENERATE_POST_IMAGES === "false") return null;
-  if (!env.GEMINI_API_KEY || !env.MESSAGE_ARCHIVE || !env.PUBLIC_WORKER_URL) return null;
+  if (!env.MESSAGE_ARCHIVE || !env.PUBLIC_WORKER_URL) return null;
 
   const imagePrompt = buildInfographicPrompt({ topic, text, target });
-  const image = await generateGeminiImage(imagePrompt, env);
-  if (!image?.bytes?.byteLength) return null;
+  let image = null;
+  let prompt = imagePrompt;
 
-  const extension = image.mimeType === "image/jpeg" ? "jpg" : "png";
+  if (env.GEMINI_API_KEY) {
+    try {
+      image = await generateGeminiImage(imagePrompt, env);
+    } catch (error) {
+      prompt = `Fallback SVG infographic used because Gemini image generation failed: ${error.message}`;
+    }
+  }
+
+  if (!image?.bytes?.byteLength) {
+    image = generateFallbackSvg({ topic, target });
+    prompt = prompt || "Fallback SVG infographic";
+  }
+
+  const extension = image.mimeType === "image/jpeg" ? "jpg" : image.mimeType === "image/svg+xml" ? "svg" : "png";
   const key = `generated-post-images/${new Date().toISOString().slice(0, 10)}/${id}.${extension}`;
   await env.MESSAGE_ARCHIVE.put(key, image.bytes, {
     httpMetadata: { contentType: image.mimeType || "image/png" },
@@ -19,7 +32,7 @@ export async function generateInfographicForPost({ id, topic, text, target }, en
   return {
     imageKey: key,
     imageUrl: `${String(env.PUBLIC_WORKER_URL).replace(/\/$/, "")}/media/${encodeURIComponent(key)}`,
-    imagePrompt
+    imagePrompt: prompt
   };
 }
 
@@ -77,6 +90,60 @@ function buildInfographicPrompt({ topic, text, target }) {
     "Post text for context:",
     String(text || "").slice(0, 1800)
   ].join("\n");
+}
+
+function generateFallbackSvg({ topic, target }) {
+  const title = normalizeSvgTitle(topic);
+  const subtitle = String(target || "engineering post").replace(/_/g, " ");
+  const renewable = /solar|wind|солнеч|ветр/i.test(String(topic || ""));
+  const leftLabel = renewable ? "Solar PV" : "Grid";
+  const rightLabel = renewable ? "Wind" : "Load";
+  const centerLabel = renewable ? "Grid study" : "Power system";
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
+  <rect width="1200" height="1200" fill="#f6f8fb"/>
+  <rect x="70" y="70" width="1060" height="1060" rx="36" fill="#ffffff" stroke="#d9e2ec" stroke-width="3"/>
+  <text x="110" y="155" font-family="Arial, Helvetica, sans-serif" font-size="46" font-weight="700" fill="#17324d">${escapeXml(title)}</text>
+  <text x="110" y="210" font-family="Arial, Helvetica, sans-serif" font-size="25" fill="#567086">${escapeXml(subtitle)}</text>
+  <line x1="150" y1="610" x2="1050" y2="610" stroke="#9fb3c8" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="300" cy="610" r="130" fill="#f9d65c" stroke="#17324d" stroke-width="8"/>
+  <path d="M245 610h110M300 555v110M262 572l76 76M338 572l-76 76" stroke="#17324d" stroke-width="9" stroke-linecap="round"/>
+  <rect x="480" y="465" width="240" height="290" rx="28" fill="#17324d"/>
+  <text x="600" y="585" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#ffffff">${escapeXml(centerLabel)}</text>
+  <text x="600" y="640" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" fill="#d8e6f3">load flow</text>
+  <text x="600" y="680" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" fill="#d8e6f3">protection</text>
+  <circle cx="900" cy="610" r="126" fill="#9ad0ec" stroke="#17324d" stroke-width="8"/>
+  <line x1="900" y1="610" x2="900" y2="500" stroke="#17324d" stroke-width="10" stroke-linecap="round"/>
+  <path d="M900 610l96 55M900 610l-96 55M900 610l0 110" stroke="#17324d" stroke-width="10" stroke-linecap="round"/>
+  <rect x="180" y="820" width="240" height="92" rx="18" fill="#eef6ff" stroke="#c8d8e8"/>
+  <rect x="480" y="820" width="240" height="92" rx="18" fill="#eef6ff" stroke="#c8d8e8"/>
+  <rect x="780" y="820" width="240" height="92" rx="18" fill="#eef6ff" stroke="#c8d8e8"/>
+  <text x="300" y="875" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#17324d">${escapeXml(leftLabel)}</text>
+  <text x="600" y="875" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#17324d">Grid limits</text>
+  <text x="900" y="875" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#17324d">${escapeXml(rightLabel)}</text>
+  <text x="600" y="1010" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="26" fill="#567086">Engineering decision = resource + grid + storage + protection</text>
+</svg>`;
+
+  return {
+    bytes: new TextEncoder().encode(svg),
+    mimeType: "image/svg+xml"
+  };
+}
+
+function normalizeSvgTitle(topic) {
+  const lower = String(topic || "").toLowerCase();
+  if ((lower.includes("солнеч") || lower.includes("solar")) && (lower.includes("ветр") || lower.includes("wind"))) {
+    return "Solar vs Wind Generation";
+  }
+  return String(topic || "Power System Engineering").replace(/\s+/g, " ").trim().slice(0, 42);
+}
+
+function escapeXml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function base64ToBytes(base64) {
