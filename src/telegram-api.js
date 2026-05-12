@@ -7,9 +7,10 @@ export async function sendTelegramMessage(env, chatId, text, options = {}) {
   if (options.photoUrl) {
     const { photoUrl: _photoUrl, ...messageOptions } = options;
     try {
-      await sendTelegramPhoto(env, chatId, options.photoUrl, "Image preview");
+      await sendTelegramPhoto(env, chatId, options.photoUrl, "");
       return sendTelegramMessage(env, chatId, text, messageOptions);
     } catch (error) {
+      console.log(JSON.stringify({ ok: false, job: "telegram-send-photo", chatId, error: error.message }));
       return sendTelegramMessage(
         env,
         chatId,
@@ -34,6 +35,8 @@ export async function sendTelegramMessage(env, chatId, text, options = {}) {
     const body = await response.text();
     throw new Error(`Telegram sendMessage failed: ${response.status} ${body}`);
   }
+  const body = await response.json();
+  console.log(JSON.stringify({ ok: true, job: "telegram-send-message", chatId, messageId: body.result?.message_id || null }));
 }
 
 async function sendTelegramPhoto(env, chatId, photoUrl, caption) {
@@ -52,4 +55,6 @@ async function sendTelegramPhoto(env, chatId, photoUrl, caption) {
     const body = await response.text();
     throw new Error(`Telegram sendPhoto failed: ${response.status} ${body}`);
   }
+  const body = await response.json();
+  console.log(JSON.stringify({ ok: true, job: "telegram-send-photo", chatId, messageId: body.result?.message_id || null }));
 }
