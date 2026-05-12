@@ -281,7 +281,7 @@ async function handleNaturalLanguage(message, context) {
       ].join("\n");
     }
 
-    const targets = normalizeTargets(intent.targets);
+    const targets = overrideTargetsFromText(trimmed, normalizeTargets(intent.targets));
     const drafts = [];
     for (const target of targets) {
       drafts.push(await createDraftFromTopic(intent.topic, { ...context, target }));
@@ -398,6 +398,21 @@ function normalizeTargets(targets) {
   const result = [...new Set((targets || []).filter((target) => valid.has(target)))];
   if (result.includes("all")) return ["all"];
   return result.length ? result : ["all"];
+}
+
+function overrideTargetsFromText(text, targets) {
+  const lower = String(text || "").toLowerCase();
+  const mentionsLinkedIn = lower.includes("linkedin") || lower.includes("линкедин") || lower.includes("linked in");
+  const companyOnly = mentionsLinkedIn
+    && (lower.includes("компани") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company"))
+    && !(lower.includes("личн") || lower.includes("персонал") || lower.includes("personal"));
+  const personalOnly = mentionsLinkedIn
+    && (lower.includes("личн") || lower.includes("персонал") || lower.includes("personal"))
+    && !(lower.includes("компани") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company"));
+
+  if (companyOnly) return ["linkedin_company"];
+  if (personalOnly) return ["linkedin_personal"];
+  return targets;
 }
 
 function formatMultipleDrafts(drafts) {

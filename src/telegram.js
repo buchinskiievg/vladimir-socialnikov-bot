@@ -25,14 +25,35 @@ export async function handleTelegramWebhook(request, env, ctx) {
     return Response.json({ ok: true });
   }
 
-  const text = message.text || "";
-  const reply = await routeCommand(text, { env, update, message });
-  const replies = Array.isArray(reply?.messages) ? reply.messages : [reply];
-  for (const item of replies) {
-    await sendTelegramMessage(env, message.chat.id, item.text || item, item.options || {});
+  if (shouldSendProcessingAck(message.text)) {
+    ctx.waitUntil(sendTelegramMessage(env, message.chat.id, "Принял, готовлю финальный пост и инфографику. Публиковать ничего не буду."));
   }
+  ctx.waitUntil(handleTelegramMessageAsync(message, { env, update }));
 
   return Response.json({ ok: true });
+}
+
+function shouldSendProcessingAck(text) {
+  const lower = String(text || "").toLowerCase();
+  if (lower.startsWith("/")) return false;
+  return lower.includes("подготов") || lower.includes("пост") || lower.includes("публикац") || lower.includes("инфограф") || lower.includes("linkedin");
+}
+
+async function handleTelegramMessageAsync(message, context) {
+  try {
+    const text = message.text || "";
+    const reply = await routeCommand(text, { ...context, message });
+    const replies = Array.isArray(reply?.messages) ? reply.messages : [reply];
+    for (const item of replies) {
+      await sendTelegramMessage(context.env, message.chat.id, item.text || item, item.options || {});
+    }
+  } catch (error) {
+    await sendTelegramMessage(
+      context.env,
+      message.chat.id,
+      `Не смог обработать сообщение.\nОшибка: ${error.message}`
+    );
+  }
 }
 
 async function handleCallbackQuery(callbackQuery, env, ctx) {

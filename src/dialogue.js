@@ -71,7 +71,7 @@ async function executeDialogueTurn(turn, context) {
 
   if (turn.intent === "create_drafts") {
     const topic = (turn.topic || "").trim();
-    const targets = normalizeTargets(turn.targets);
+    const targets = overrideTargetsFromText(context.message.text, normalizeTargets(turn.targets));
 
     if (!topic) {
       await writeFastMemory(env, {
@@ -95,7 +95,7 @@ async function executeDialogueTurn(turn, context) {
 
   if (turn.intent === "provide_topic" && fastMemory.pendingIntent === "create_drafts") {
     const topic = (turn.topic || context.message.text || "").trim();
-    const targets = normalizeTargets(fastMemory.pendingTargets);
+    const targets = overrideTargetsFromText(context.message.text, normalizeTargets(fastMemory.pendingTargets));
     const drafts = [];
     for (const target of targets) {
       drafts.push(await createDraftFromTopic(topic, { ...context, target }));
@@ -243,6 +243,21 @@ function normalizeTargets(targets) {
   const normalized = [...new Set((targets || []).filter((target) => valid.has(target)))];
   if (normalized.includes("all")) return ["all"];
   return normalized.length ? normalized : ["all"];
+}
+
+function overrideTargetsFromText(text, targets) {
+  const lower = String(text || "").toLowerCase();
+  const mentionsLinkedIn = lower.includes("linkedin") || lower.includes("линкедин") || lower.includes("linked in");
+  const companyOnly = mentionsLinkedIn
+    && (lower.includes("компани") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company"))
+    && !(lower.includes("личн") || lower.includes("персонал") || lower.includes("personal"));
+  const personalOnly = mentionsLinkedIn
+    && (lower.includes("личн") || lower.includes("персонал") || lower.includes("personal"))
+    && !(lower.includes("компани") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company"));
+
+  if (companyOnly) return ["linkedin_company"];
+  if (personalOnly) return ["linkedin_personal"];
+  return targets;
 }
 
 function formatDrafts(drafts) {

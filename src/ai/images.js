@@ -25,11 +25,13 @@ export async function generateInfographicForPost({ id, topic, text, target }, en
 
 async function generateGeminiImage(prompt, env) {
   const model = env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
+  const timeoutMs = Number(env.GEMINI_IMAGE_TIMEOUT_MS || 45000);
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
+      signal: AbortSignal.timeout(timeoutMs),
       body: JSON.stringify({
         contents: [{
           role: "user",
