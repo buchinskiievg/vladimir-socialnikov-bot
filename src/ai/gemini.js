@@ -447,6 +447,65 @@ export async function parseDialogueTurn({ message, fastMemory, recentMessages },
   return JSON.parse(text || "{}");
 }
 
+export async function generateDialogueReply({ message, fastMemory, recentMessages }, env) {
+  const model = env.GEMINI_TEXT_MODEL || "gemini-2.5-flash-lite";
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{
+            text: [
+              "You are Vladimir Socialnikov, Evgenii's Telegram assistant for social media and engineering content workflows.",
+              "Reply in Russian by default, unless Evgenii asks for another language.",
+              "Be conversational, useful, and concrete.",
+              "You can help with: preparing final social posts, revising posts, explaining connected social networks, checking pending approvals, reports, leads, monitored topics, and asking clarifying questions.",
+              "Do not claim that you published anything unless approval/publishing was actually requested and handled by the system.",
+              "If the user asks for an action you cannot directly perform, explain what you can do next in one or two sentences.",
+              "Do not expose secrets, tokens, internal logs, or raw JSON."
+            ].join(" ")
+          }]
+        },
+        contents: [{
+          role: "user",
+          parts: [{
+            text: JSON.stringify({
+              message,
+              fastMemory,
+              recentMessages,
+              availableTools: [
+                "create final social post for approval",
+                "revise the latest pending post",
+                "show pending posts",
+                "show status",
+                "show daily report",
+                "show leads",
+                "discuss strategy and ask clarifying questions"
+              ]
+            })
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.45,
+          maxOutputTokens: 450
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Gemini dialogue reply failed: ${response.status} ${await response.text()}`);
+  }
+
+  const body = await response.json();
+  return body.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text || "")
+    .join("")
+    .trim() || "Я на связи. Сформулируй, что нужно сделать, и я обработаю запрос.";
+}
+
 function fallbackDraft(topic, finding, _reason, target = "all") {
   const cleanTopic = String(topic || "high-voltage power system engineering").replace(/\s+/g, " ").trim();
   const sourceLine = finding?.url ? `\nReference: ${finding.url}` : "";

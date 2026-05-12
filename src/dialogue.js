@@ -1,4 +1,4 @@
-import { parseDialogueTurn } from "./ai/gemini.js";
+import { generateDialogueReply, parseDialogueTurn } from "./ai/gemini.js";
 import { createDraftFromTopic, listPendingDrafts, reviseDraft } from "./workflows/drafts.js";
 import {
   appendChatMessage,
@@ -8,6 +8,10 @@ import {
   resetFastMemory,
   writeFastMemory
 } from "./storage/memory.js";
+
+const REPLY_ASK_TOPIC = "\u041f\u043e\u043d\u044f\u043b. \u0414\u043b\u044f \u043a\u0430\u043a\u043e\u0439 \u0442\u0435\u043c\u044b \u0433\u043e\u0442\u043e\u0432\u0438\u043c \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u044e?";
+const REPLY_GENERIC = "\u042f \u043d\u0430 \u0441\u0432\u044f\u0437\u0438. \u041c\u043e\u0436\u0435\u0448\u044c \u043f\u043e\u043f\u0440\u043e\u0441\u0438\u0442\u044c \u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u0438\u0442\u044c \u043f\u043e\u0441\u0442, \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043e\u0442\u0447\u0435\u0442, \u043b\u0438\u0434\u044b \u0438\u043b\u0438 \u043f\u043e\u0441\u0442\u044b \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443.";
+const REPLY_GEMINI_DOWN = "\u041f\u043e\u043d\u044f\u043b \u0441\u043c\u044b\u0441\u043b, \u043d\u043e \u0441\u0435\u0439\u0447\u0430\u0441 \u043c\u043e\u0439 AI-\u043c\u043e\u0437\u0433 \u043d\u0435 \u043e\u0442\u0432\u0435\u0442\u0438\u043b. \u042f \u0432\u0441\u0435 \u0440\u0430\u0432\u043d\u043e \u043c\u043e\u0433\u0443 \u0441\u0434\u0435\u043b\u0430\u0442\u044c \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u043e\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435: \u043f\u043e\u0441\u0442, \u043f\u0440\u0430\u0432\u043a\u0443, \u043e\u0442\u0447\u0435\u0442, \u043b\u0438\u0434\u044b \u0438\u043b\u0438 \u0441\u0442\u0430\u0442\u0443\u0441.";
 
 export async function handleDialogue(message, context) {
   const env = context.env;
@@ -26,11 +30,7 @@ export async function handleDialogue(message, context) {
   const explicitTopic = extractExplicitTopic(text);
 
   if (!newDraftRequest && looksLikeDraftRevision(text)) {
-    return rememberAndReturn(
-      env,
-      chatId,
-      await handleDraftRevision(text, { ...context, fastMemory, chatId })
-    );
+    return rememberAndReturn(env, chatId, await handleDraftRevision(text, { ...context, fastMemory, chatId }));
   }
 
   if (newDraftRequest && !explicitTopic) {
@@ -43,28 +43,25 @@ export async function handleDialogue(message, context) {
       pendingTargets: targets,
       pendingTopicHint: ""
     });
-    return rememberAndReturn(env, chatId, "Понял. Для каких тем готовим публикации?");
+    return rememberAndReturn(env, chatId, REPLY_ASK_TOPIC);
   }
 
   if (newDraftRequest && explicitTopic) {
-    const turn = {
-      intent: "create_drafts",
-      topic: explicitTopic,
-      targets: inferTargets(text)
-    };
+    const turn = { intent: "create_drafts", topic: explicitTopic, targets: inferTargets(text) };
     return rememberAndReturn(
       env,
       chatId,
       await executeDialogueTurn(turn, {
         ...context,
         message,
-        fastMemory: { ...fastMemory, pendingIntent: "", pendingTargets: [], pendingTopicHint: "" }
+        fastMemory: { ...fastMemory, pendingIntent: "", pendingTargets: [], pendingTopicHint: "" },
+        recentMessages
       })
     );
   }
 
   const turn = await parseTurnWithFallback({ message: text, fastMemory, recentMessages }, env);
-  return rememberAndReturn(env, chatId, await executeDialogueTurn(turn, { ...context, message, fastMemory }));
+  return rememberAndReturn(env, chatId, await executeDialogueTurn(turn, { ...context, message, fastMemory, recentMessages }));
 }
 
 async function rememberAndReturn(env, chatId, response) {
@@ -92,10 +89,10 @@ async function parseTurnWithFallback(input, env) {
 function fallbackDialogueTurn(message, fastMemory) {
   const text = String(message || "");
   const lower = text.toLowerCase();
-  if (lower.includes("статус") || lower.includes("status")) return { intent: "status" };
-  if (lower.includes("отчет") || lower.includes("отчёт") || lower.includes("report")) return { intent: "report" };
-  if (lower.includes("лид") || lower.includes("lead")) return { intent: "leads" };
-  if (lower.includes("проверк") || lower.includes("pending")) return { intent: "pending" };
+  if (hasAny(lower, ["\u0441\u0442\u0430\u0442\u0443\u0441", "status"])) return { intent: "status" };
+  if (hasAny(lower, ["\u043e\u0442\u0447\u0435\u0442", "\u043e\u0442\u0447\u0451\u0442", "report"])) return { intent: "report" };
+  if (hasAny(lower, ["\u043b\u0438\u0434", "lead"])) return { intent: "leads" };
+  if (hasAny(lower, ["\u043f\u0440\u043e\u0432\u0435\u0440\u043a", "pending"])) return { intent: "pending" };
   if (fastMemory?.pendingIntent === "create_drafts") {
     return { intent: "provide_topic", topic: text, targets: fastMemory.pendingTargets || ["all"] };
   }
@@ -106,7 +103,7 @@ function fallbackDialogueTurn(message, fastMemory) {
       targets: inferTargets(text)
     };
   }
-  return { intent: "chat", reply: "Я на связи. Можешь попросить подготовить пост, показать отчет, лиды или посты на проверку." };
+  return { intent: "chat", reply: "" };
 }
 
 async function executeDialogueTurn(turn, context) {
@@ -117,7 +114,6 @@ async function executeDialogueTurn(turn, context) {
   if (turn.intent === "create_drafts") {
     const topic = cleanupFallbackTopic(turn.topic || "");
     const targets = overrideTargetsFromText(context.message.text, normalizeTargets(turn.targets));
-
     if (!topic) {
       await writeFastMemory(env, {
         ...fastMemory,
@@ -127,7 +123,7 @@ async function executeDialogueTurn(turn, context) {
         pendingTargets: targets,
         pendingTopicHint: ""
       });
-      return "Понял. Для каких тем готовим публикации?";
+      return REPLY_ASK_TOPIC;
     }
 
     const drafts = [];
@@ -154,7 +150,26 @@ async function executeDialogueTurn(turn, context) {
   if (turn.intent === "pending") return "/pending";
   if (turn.intent === "leads") return "/leads";
 
-  return turn.reply || "Я на связи. Можешь попросить подготовить публикацию, показать отчет, лиды или посты на проверку.";
+  if (turn.intent === "chat") {
+    return await buildBrainReply(context, turn.reply);
+  }
+
+  return await buildBrainReply(context, turn.reply || "");
+}
+
+async function buildBrainReply(context, parsedReply) {
+  if (context.env.GEMINI_API_KEY) {
+    try {
+      return await generateDialogueReply({
+        message: context.message.text || "",
+        fastMemory: context.fastMemory,
+        recentMessages: context.recentMessages || []
+      }, context.env);
+    } catch (error) {
+      console.log(JSON.stringify({ ok: false, job: "dialogue-brain", error: error.message }));
+    }
+  }
+  return parsedReply || REPLY_GEMINI_DOWN || REPLY_GENERIC;
 }
 
 async function rememberDrafts(env, fastMemory, chatId, drafts) {
@@ -194,7 +209,7 @@ async function handleDraftRevision(text, context) {
   const ids = extractDraftIds(text);
   const targetIds = ids.length ? ids : await inferDraftIdsForRevision(env, text, summary);
   if (!targetIds.length) {
-    return "Понял правку, но не вижу поста на проверку. Напиши, например: перепиши последний пост короче.";
+    return "\u041f\u043e\u043d\u044f\u043b \u043f\u0440\u0430\u0432\u043a\u0443, \u043d\u043e \u043d\u0435 \u0432\u0438\u0436\u0443 \u043f\u043e\u0441\u0442\u0430 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443. \u041d\u0430\u043f\u0438\u0448\u0438, \u043d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u043f\u0435\u0440\u0435\u043f\u0438\u0448\u0438 \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u043f\u043e\u0441\u0442 \u043a\u043e\u0440\u043e\u0447\u0435.";
   }
 
   const updated = [];
@@ -203,7 +218,7 @@ async function handleDraftRevision(text, context) {
     if (result.ok && result.draft) updated.push(result.draft);
   }
 
-  if (!updated.length) return "Не смог найти подходящий пост на проверку для правки.";
+  if (!updated.length) return "\u041d\u0435 \u0441\u043c\u043e\u0433 \u043d\u0430\u0439\u0442\u0438 \u043f\u043e\u0434\u0445\u043e\u0434\u044f\u0449\u0438\u0439 \u043f\u043e\u0441\u0442 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443 \u0434\u043b\u044f \u043f\u0440\u0430\u0432\u043a\u0438.";
   await rememberDrafts(env, fastMemory, context.chatId, updated);
   return formatDrafts(updated);
 }
@@ -211,109 +226,104 @@ async function handleDraftRevision(text, context) {
 async function inferDraftIdsForRevision(env, text, summary) {
   const recentIds = Array.isArray(summary.recentDraftIds) ? summary.recentDraftIds.filter(Boolean) : [];
   const lower = String(text || "").toLowerCase();
-  if (recentIds.length && (lower.includes("оба") || lower.includes("все") || lower.includes("их") || lower.includes("both") || lower.includes("all"))) {
-    return recentIds.slice(0, 4);
-  }
+  if (recentIds.length && hasAny(lower, ["\u043e\u0431\u0430", "\u0432\u0441\u0435", "\u0438\u0445", "both", "all"])) return recentIds.slice(0, 4);
   if (recentIds.length) return [recentIds[0]];
 
   const pending = await listPendingDrafts(env);
   if (!pending.length) return [];
-  if (lower.includes("оба") || lower.includes("все") || lower.includes("их") || lower.includes("both") || lower.includes("all")) {
-    return pending.slice(0, 4).map((draft) => draft.id);
-  }
+  if (hasAny(lower, ["\u043e\u0431\u0430", "\u0432\u0441\u0435", "\u0438\u0445", "both", "all"])) return pending.slice(0, 4).map((draft) => draft.id);
   return [pending[0].id];
 }
 
 function looksLikeDraftRevision(text) {
   const lower = String(text || "").toLowerCase();
-  return [
-    "перепиши",
-    "переделай",
-    "измени",
-    "сделай короче",
-    "укороти",
-    "длиннее",
-    "подробнее",
-    "техничес",
-    "без маркет",
-    "меньше продаж",
-    "смени тему",
-    "замени тему",
-    "поменяй тему",
-    "переведи",
+  return hasAny(lower, [
+    "\u043f\u0435\u0440\u0435\u043f\u0438\u0448\u0438",
+    "\u043f\u0435\u0440\u0435\u0434\u0435\u043b\u0430\u0439",
+    "\u0438\u0437\u043c\u0435\u043d\u0438",
+    "\u0441\u0434\u0435\u043b\u0430\u0439 \u043a\u043e\u0440\u043e\u0447\u0435",
+    "\u0443\u043a\u043e\u0440\u043e\u0442\u0438",
+    "\u0434\u043b\u0438\u043d\u043d\u0435\u0435",
+    "\u043f\u043e\u0434\u0440\u043e\u0431\u043d\u0435\u0435",
+    "\u0442\u0435\u0445\u043d\u0438\u0447",
+    "\u0431\u0435\u0437 \u043c\u0430\u0440\u043a\u0435\u0442",
+    "\u0441\u043c\u0435\u043d\u0438 \u0442\u0435\u043c\u0443",
+    "\u0437\u0430\u043c\u0435\u043d\u0438 \u0442\u0435\u043c\u0443",
+    "\u043f\u043e\u043c\u0435\u043d\u044f\u0439 \u0442\u0435\u043c\u0443",
+    "\u043f\u0435\u0440\u0435\u0432\u0435\u0434\u0438",
     "translate",
     "rewrite",
     "revise",
     "shorter",
     "more technical",
     "less sales"
-  ].some((marker) => lower.includes(marker));
+  ]);
 }
 
 function startsNewDraftRequest(text) {
   const lower = String(text || "").toLowerCase();
-  return [
-    "подготов",
-    "сделай пост",
-    "сделай публикац",
-    "напиши пост",
-    "напиши публикац",
-    "пост для",
-    "публикац",
+  return hasAny(lower, [
+    "\u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432",
+    "\u0441\u0434\u0435\u043b\u0430\u0439 \u043f\u043e\u0441\u0442",
+    "\u0441\u0434\u0435\u043b\u0430\u0439 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446",
+    "\u043d\u0430\u043f\u0438\u0448\u0438 \u043f\u043e\u0441\u0442",
+    "\u043d\u0430\u043f\u0438\u0448\u0438 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446",
+    "\u043f\u043e\u0441\u0442 \u0434\u043b\u044f",
+    "\u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446",
     "draft",
     "prepare",
     "write a post"
-  ].some((marker) => lower.includes(marker));
+  ]);
 }
 
 function extractExplicitTopic(text) {
-  const match = String(text || "").match(/(?:по теме|на тему|про|about)\s*[-:—]?\s*(.+)$/i);
+  const match = String(text || "").match(/(?:\u043f\u043e \u0442\u0435\u043c\u0435|\u043d\u0430 \u0442\u0435\u043c\u0443|\u043f\u0440\u043e|about)\s*[-:—]?\s*(.+)$/i);
   const topic = match?.[1]?.trim() || "";
   return topic.length >= 4 ? cleanupFallbackTopic(topic) : "";
 }
 
 function cleanupFallbackTopic(text) {
   return String(text || "")
-    .replace(/^.*?(?:по теме|на тему|про|about)\s*[-:—]?\s*/i, "")
-    .replace(/\b(?:пока|ничего|не|публикуй|опубликовывай).*$/i, "")
+    .replace(/^.*?(?:\u043f\u043e \u0442\u0435\u043c\u0435|\u043d\u0430 \u0442\u0435\u043c\u0443|\u043f\u0440\u043e|about)\s*[-:—]?\s*/i, "")
+    .replace(/\b(?:\u043f\u043e\u043a\u0430|\u043d\u0438\u0447\u0435\u0433\u043e|\u043d\u0435|\u043f\u0443\u0431\u043b\u0438\u043a\u0443\u0439|\u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u044b\u0432\u0430\u0439).*$/i, "")
     .replace(/\bwith a .*$/i, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function extractChangedTopic(text) {
-  const match = String(text || "").match(/(?:смени|замени|поменяй)\s+тему\s+(?:на|про|о)\s+(.+)$/i);
+  const match = String(text || "").match(/(?:\u0441\u043c\u0435\u043d\u0438|\u0437\u0430\u043c\u0435\u043d\u0438|\u043f\u043e\u043c\u0435\u043d\u044f\u0439)\s+\u0442\u0435\u043c\u0443\s+(?:\u043d\u0430|\u043f\u0440\u043e|\u043e)\s+(.+)$/i);
   const topic = match?.[1]?.trim() || "";
   return topic.length >= 8 ? cleanupFallbackTopic(topic) : "";
 }
 
 function extractDraftIds(text) {
   const ids = [];
-  const matches = String(text || "").matchAll(/\b(?:draft|черновик)?\s*([a-f0-9]{8})\b/gi);
+  const matches = String(text || "").matchAll(/\b(?:draft|\u0447\u0435\u0440\u043d\u043e\u0432\u0438\u043a)?\s*([a-f0-9]{8})\b/gi);
   for (const match of matches) ids.push(match[1]);
   return [...new Set(ids)];
 }
 
 function mentionsPlatform(text) {
   const lower = String(text || "").toLowerCase();
-  return ["linkedin", "линкедин", "facebook", "фейсбук", "instagram", "инстаграм", "threads", "reddit"].some((item) => lower.includes(item));
+  return hasAny(lower, ["linkedin", "\u043b\u0438\u043d\u043a\u0435\u0434\u0438\u043d", "facebook", "\u0444\u0435\u0439\u0441\u0431\u0443\u043a", "instagram", "\u0438\u043d\u0441\u0442\u0430\u0433\u0440\u0430\u043c", "threads", "reddit"]);
 }
 
 function inferTargets(text) {
   const lower = String(text || "").toLowerCase();
   const targets = [];
-  const mentionsLinkedIn = lower.includes("linkedin") || lower.includes("линкедин") || lower.includes("linked in");
+  const mentionsLinkedIn = hasAny(lower, ["linkedin", "\u043b\u0438\u043d\u043a\u0435\u0434\u0438\u043d", "linked in"]);
 
   if (mentionsLinkedIn) {
-    const wantsCompany = lower.includes("компани") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company") || lower.includes("ieccalc");
-    const wantsPersonal = lower.includes("личн") || lower.includes("персонал") || lower.includes("personal");
+    const wantsCompany = hasAny(lower, ["\u043a\u043e\u043c\u043f\u0430\u043d\u0438", "\u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0446", "\u0441\u0442\u0440\u0430\u043d\u0438\u0446", "company", "ieccalc"]);
+    const wantsPersonal = hasAny(lower, ["\u043b\u0438\u0447\u043d", "\u043f\u0435\u0440\u0441\u043e\u043d\u0430\u043b", "personal"]);
     if (wantsCompany) targets.push("linkedin_company");
     if (wantsPersonal) targets.push("linkedin_personal");
     if (!wantsCompany && !wantsPersonal) targets.push("linkedin_personal");
   }
 
-  if (lower.includes("facebook") || lower.includes("фейсбук")) targets.push("facebook");
-  if (lower.includes("instagram") || lower.includes("инстаграм")) targets.push("instagram");
+  if (hasAny(lower, ["facebook", "\u0444\u0435\u0439\u0441\u0431\u0443\u043a"])) targets.push("facebook");
+  if (hasAny(lower, ["instagram", "\u0438\u043d\u0441\u0442\u0430\u0433\u0440\u0430\u043c"])) targets.push("instagram");
   if (lower.includes("threads")) targets.push("threads");
   if (lower.includes("reddit")) targets.push("reddit");
 
@@ -372,6 +382,10 @@ function responseToMemoryText(response) {
       .join("\n\n");
   }
   return JSON.stringify(response || "");
+}
+
+function hasAny(text, markers) {
+  return markers.some((marker) => text.includes(marker));
 }
 
 export async function resetDialogue(env, chatId) {
