@@ -20,6 +20,7 @@ export async function generatePostDraft({ topic, finding, target }, env) {
           parts: [{
             text: [
               "Write concise professional social posts for electrical power engineers.",
+              "Always write the final social post in English, even when the user topic or source context is in Russian or another language.",
               "Return exactly one ready-to-publish post.",
               "Do not provide options, alternatives, explanations, or markdown headings.",
               "Avoid hype. Do not copy source text. Mention standards only when relevant."
@@ -38,6 +39,7 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               source,
               "",
               "Prepare exactly one final LinkedIn-style post for human approval.",
+              "Language: English only. Translate the user's topic into natural professional English before writing.",
               "Use this structure:",
               "1. Strong first line.",
               "2. Three short technical points.",

@@ -67,7 +67,7 @@ function buildInfographicPrompt({ topic, text, target }) {
     "Style: modern technical infographic, white/light background, restrained colors, IEC/utility engineering feel, no cartoon style, no people, no brand logos.",
     "Format: 1:1 square, suitable for LinkedIn, Facebook, Instagram.",
     "Content: show a clear visual concept using simplified single-line diagram elements, grid/substation/capacitor bank/protection/software blocks when relevant.",
-    "Text in image: use very little text, maximum 5 short labels, large and legible. Avoid long paragraphs.",
+    "Text in image: English only. Use very little text, maximum 5 short labels, large and legible. Avoid long paragraphs.",
     "Do not include fake standards numbers, fake company logos, watermarks, signatures, QR codes, or contact details.",
     `Topic: ${topic}`,
     `Target: ${target || "all"}`,
