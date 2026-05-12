@@ -8,7 +8,7 @@ crons = ["0 */6 * * *", "0 4 * * *"]
 [vars]
 BOT_NAME = "vladimir_socialnikov_bot"
 ALLOWED_TELEGRAM_USER_IDS = "5284518943"
-TELEGRAM_REPORT_CHAT_ID = "5284518943"
+TELEGRAM_REPORT_CHAT_ID = "-5102772658"
 SOCIAL_DRY_RUN = "true"
 META_GRAPH_API_VERSION = "v24.0"
 OPENAI_TEXT_MODEL = "gpt-4.1-mini"

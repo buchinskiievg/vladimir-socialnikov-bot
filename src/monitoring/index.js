@@ -16,7 +16,7 @@ import { scoreLeadPotential, scoreMaterial } from "../scoring/material-score.js"
 
 export async function runMonitoringCycle(env, event) {
   const startedAt = new Date().toISOString();
-  const sources = await listSources(env);
+  const sources = filterSources(await listSources(env), event);
   const findings = [];
   await pruneExpiredFindingSentences(env, startedAt);
 
@@ -123,6 +123,27 @@ export async function runMonitoringCycle(env, event) {
     draftsCreated: demandResult.drafts.length,
     dryRun: env.SOCIAL_DRY_RUN !== "false"
   }));
+
+  return {
+    ok: true,
+    startedAt,
+    sources: sources.length,
+    findings: findings.length,
+    demandTopics: demandResult.topics.length,
+    draftsCreated: demandResult.drafts.length,
+    dryRun: env.SOCIAL_DRY_RUN !== "false"
+  };
+}
+
+function filterSources(sources, event = {}) {
+  const allowedTypes = Array.isArray(event.sourceTypes) && event.sourceTypes.length
+    ? new Set(event.sourceTypes)
+    : null;
+  const limit = Number(event.limit || 0);
+  const offset = Number(event.offset || 0);
+  const filtered = allowedTypes ? sources.filter((source) => allowedTypes.has(source.type)) : sources;
+  const sliced = offset > 0 ? filtered.slice(offset) : filtered;
+  return limit > 0 ? sliced.slice(0, limit) : sliced;
 }
 
 async function notifyDemandDrafts(env, demandResult) {
