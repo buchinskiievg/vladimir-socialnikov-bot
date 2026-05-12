@@ -69,6 +69,26 @@ export async function updateDraftText(env, id, text) {
     .run();
 }
 
+export async function updateDraftImage(env, id, image) {
+  if (!env.DB) {
+    const draft = memoryDrafts.get(id);
+    if (draft) {
+      memoryDrafts.set(id, {
+        ...draft,
+        imageUrl: image.imageUrl || "",
+        imageKey: image.imageKey || "",
+        imagePrompt: image.imagePrompt || draft.imagePrompt || "",
+        updatedAt: new Date().toISOString()
+      });
+    }
+    return;
+  }
+
+  await env.DB.prepare("update drafts set image_url = ?, image_key = ?, image_prompt = ?, updated_at = ? where id = ?")
+    .bind(image.imageUrl || null, image.imageKey || null, image.imagePrompt || null, new Date().toISOString(), id)
+    .run();
+}
+
 function fromRow(row) {
   return {
     id: row.id,

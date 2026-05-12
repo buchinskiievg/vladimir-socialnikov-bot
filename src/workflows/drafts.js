@@ -1,5 +1,5 @@
 import { publishToSocials } from "../social/index.js";
-import { insertDraft, listDraftsByStatus, readDraft, updateDraftStatus, updateDraftText } from "../storage/drafts.js";
+import { insertDraft, listDraftsByStatus, readDraft, updateDraftImage, updateDraftStatus, updateDraftText } from "../storage/drafts.js";
 
 export async function createDraftFromTopic(topic, context) {
   const id = crypto.randomUUID().slice(0, 8);
@@ -41,9 +41,28 @@ export async function reviseDraft(id, instruction, context) {
 }
 
 export async function approveDraft(id, context) {
-  const draft = await readDraft(context.env, id);
+  let draft = await readDraft(context.env, id);
   if (!draft) return { ok: false, message: `Post ${id} not found.` };
   if (draft.status !== "pending") return { ok: false, message: `Post ${id} is ${draft.status}.` };
+
+  if (!draft.imageUrl && context.env.GENERATE_POST_IMAGES !== "false") {
+    const image = await generateDraftImage({
+      id: draft.id,
+      topic: draft.topic,
+      text: draft.text,
+      target: draft.target || "all"
+    }, context.env);
+
+    if (image.imageUrl) {
+      await updateDraftImage(context.env, id, image);
+      draft = { ...draft, ...image };
+    } else {
+      return {
+        ok: false,
+        message: `Post ${id}: image is missing, so I did not publish it. ${image.imagePrompt || "Image generation failed."}`
+      };
+    }
+  }
 
   const publishResult = await publishToSocials({
     text: draft.text,

@@ -11,7 +11,11 @@ export async function publishFacebookPage(post, env) {
   }
 
   if (isDryRun(env)) {
-    return { ok: true, message: "dry run" };
+    return { ok: true, message: post.imageUrl ? "dry run with image" : "dry run without image" };
+  }
+
+  if (post.imageUrl) {
+    return publishFacebookPhotoDirect(post, env);
   }
 
   const response = await fetch(`${graphApiBase(env)}/${env.FACEBOOK_PAGE_ID}/feed`, {
@@ -32,7 +36,21 @@ export async function publishFacebookPage(post, env) {
 
 async function publishFacebookViaComposio(post, env) {
   if (isDryRun(env)) {
-    return { ok: true, message: `dry run via Composio to Facebook Page ${env.COMPOSIO_FACEBOOK_PAGE_ID}` };
+    return { ok: true, message: `dry run via Composio to Facebook Page ${env.COMPOSIO_FACEBOOK_PAGE_ID}${post.imageUrl ? " with image" : ""}` };
+  }
+
+  if (post.imageUrl) {
+    return executeComposioTool(
+      env,
+      "FACEBOOK_CREATE_PHOTO_POST",
+      env.COMPOSIO_FACEBOOK_ACCOUNT_ID,
+      {
+        page_id: env.COMPOSIO_FACEBOOK_PAGE_ID,
+        url: post.imageUrl,
+        caption: post.text,
+        published: true
+      }
+    );
   }
 
   return executeComposioTool(
@@ -45,4 +63,24 @@ async function publishFacebookViaComposio(post, env) {
       published: true
     }
   );
+}
+
+async function publishFacebookPhotoDirect(post, env) {
+  const response = await fetch(`${graphApiBase(env)}/${env.FACEBOOK_PAGE_ID}/photos`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      url: post.imageUrl,
+      caption: post.text,
+      published: "true",
+      access_token: env.FACEBOOK_PAGE_ACCESS_TOKEN
+    })
+  });
+
+  if (!response.ok) {
+    return { ok: false, message: await response.text() };
+  }
+
+  const body = await response.json().catch(() => ({}));
+  return { ok: true, message: body.post_id || body.id || "published with image" };
 }
