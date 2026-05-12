@@ -25,7 +25,9 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               "Return exactly one ready-to-publish post.",
               "Do not provide options, alternatives, explanations, or markdown headings.",
               "Avoid hype. Do not copy source text. Mention standards only when relevant.",
-              "Use the target platform's optimal length and depth. Do not make LinkedIn posts too short."
+              "Use the target platform's optimal length and depth. Do not make LinkedIn posts too short.",
+              "The opening must be a strong human hook, not a news-title restatement.",
+              "Never start with phrases like 'The recent...', 'The development of...', 'The construction of...', 'X represents...', or '<topic>:'."
             ].join(" ")
           }]
         },
@@ -44,6 +46,7 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               "Prepare exactly one final platform-optimized post for human approval.",
               "Language: English only. Translate the user's topic into natural professional English before writing.",
               "Use the requested platform length and structure.",
+              "Start with a standalone engineering insight, tension, or practical problem. Do not repeat the title as the first sentence.",
               "For LinkedIn, use a strong hook, 4-6 substantial technical points, a practical takeaway, and one discussion question. LinkedIn posts must be at least the requested minimum length.",
               "For Facebook, use a practical hook, 3-5 readable points, and a simple question.",
               "For Instagram, use a concise caption that works with the infographic.",
@@ -74,7 +77,7 @@ export async function generatePostDraft({ topic, finding, target }, env) {
     .trim();
 
   const finalText = text || fallbackDraft(topic, finding, "empty model output", target);
-  return ensurePlatformLength(finalText, { topic, target });
+  return polishPostStart(ensurePlatformLength(finalText, { topic, target }), { topic, target });
 }
 
 function ensurePlatformLength(text, { topic, target }) {
@@ -101,6 +104,53 @@ function ensurePlatformLength(text, { topic, target }) {
   ].join("\n");
 
   return `${text.trim()}\n${addition}`;
+}
+
+function polishPostStart(text, { topic, target }) {
+  const cleanTopic = cleanPostTopic(topic);
+  let result = String(text || "").trim();
+  if (!result) return result;
+
+  result = result.replace(new RegExp(`^${escapeRegExp(cleanTopic)}\\s*[:\\-–—.]\\s*`, "i"), "");
+
+  const weakStart = /^(the recent|the development of|the construction of|the rapid expansion of|the launch of|the announcement of|.+?: what engineers should look at beyond the headline)/i;
+  if (weakStart.test(result)) {
+    result = `${openingHookForTopic(cleanTopic, target)}\n\n${stripFirstParagraph(result)}`;
+  }
+
+  return result.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function stripFirstParagraph(text) {
+  const parts = String(text || "").split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
+  return parts.length > 1 ? parts.slice(1).join("\n\n") : text;
+}
+
+function openingHookForTopic(topic, target) {
+  const lower = String(topic || "").toLowerCase();
+  if (lower.includes("data center")) {
+    return "Data center load growth is no longer just a planning note; it is becoming a grid reliability constraint.";
+  }
+  if (lower.includes("safegrid") || lower.includes("smart grid")) {
+    return "Smart grid technology matters only when it gives operators clearer visibility and faster control of real network risk.";
+  }
+  if (lower.includes("drone") || lower.includes("field to system")) {
+    return "Drone inspections are easy to collect; the hard part is turning field data into engineering action.";
+  }
+  if (lower.includes("transformer")) {
+    return "Transformer availability is becoming one of the quiet constraints behind grid expansion and renewable interconnection.";
+  }
+  if (lower.includes("solar")) {
+    return "A solar project is not just panels and inverters; it is a grid connection problem with a generation asset attached.";
+  }
+  if (target === "linkedin_company") {
+    return "The headline is only useful if it can be translated into a repeatable engineering check.";
+  }
+  return "The headline is only the starting point; the engineering question is what must change in design, operation, or risk control.";
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function minCharsForTarget(target) {
@@ -511,10 +561,10 @@ function fallbackDraft(topic, finding, _reason, target = "all") {
   const sourceLine = finding?.url ? `\nReference: ${finding.url}` : "";
 
   if (isRenewableComparisonTopic(cleanTopic)) {
-    return ensurePlatformLength(renewableComparisonPost(target, sourceLine), { topic: cleanTopic, target });
+    return polishPostStart(ensurePlatformLength(renewableComparisonPost(target, sourceLine), { topic: cleanTopic, target }), { topic: cleanTopic, target });
   }
   if (isDroneDataTopic(cleanTopic)) {
-    return ensurePlatformLength(droneDataPost(cleanTopic, sourceLine, target), { topic: cleanTopic, target });
+    return polishPostStart(ensurePlatformLength(droneDataPost(cleanTopic, sourceLine, target), { topic: cleanTopic, target }), { topic: cleanTopic, target });
   }
 
   if (target === "threads") {
@@ -558,7 +608,7 @@ function fallbackDraft(topic, finding, _reason, target = "all") {
     ].join("\n");
   }
 
-  return ensurePlatformLength(genericEngineeringPost(cleanTopic, sourceLine, target), { topic: cleanTopic, target });
+  return polishPostStart(ensurePlatformLength(genericEngineeringPost(cleanTopic, sourceLine, target), { topic: cleanTopic, target }), { topic: cleanTopic, target });
 }
 
 function cleanPostTopic(topic) {
@@ -572,7 +622,7 @@ function cleanPostTopic(topic) {
 function genericEngineeringPost(topic, sourceLine, target) {
   const companyVoice = target === "linkedin_company";
   return [
-    `${topic}: what engineers should look at beyond the headline.`,
+    openingHookForTopic(topic, target),
     "",
     "Industry news becomes useful only when it is translated into design checks, operating constraints, and project risk. For power engineering teams, the important question is not simply what happened, but what it changes in the electrical system.",
     "",
@@ -609,7 +659,7 @@ function isDroneDataTopic(topic) {
 function droneDataPost(topic, sourceLine, target) {
   const companyVoice = target === "linkedin_company";
   return [
-    `${topic}: why drone data only becomes valuable when it reaches the engineering system.`,
+    "Drone inspections are easy to collect; the hard part is turning field data into engineering action.",
     "",
     "Drones can collect impressive field data, but the real engineering value starts after the flight. Aerial inspection, thermal imagery, LiDAR, and site photos are useful only when they are connected to asset records, design drawings, maintenance history, and actionable engineering decisions.",
     "",
