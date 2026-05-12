@@ -9,8 +9,16 @@ export async function createDraftsFromDemand(findings, env) {
 
   for (const item of topics.sort((a, b) => Number(b.score || 0) - Number(a.score || 0)).slice(0, maxDrafts)) {
     const target = normalizeTarget(item.target);
-    const topic = buildTopic(item);
-    drafts.push(await createDraftFromTopic(topic, { env, target }));
+    const topic = cleanTopic(item.topic);
+    drafts.push(await createDraftFromTopic(topic, {
+      env,
+      target,
+      finding: {
+        title: topic,
+        excerpt: [item.angle, item.demandReason].filter(Boolean).join("\n"),
+        url: item.evidenceUrls?.[0] || ""
+      }
+    }));
   }
 
   return { topics: topics.slice(0, maxDrafts), drafts };
@@ -68,13 +76,12 @@ function fallbackTopics(findings) {
     }));
 }
 
-function buildTopic(item) {
-  return [
-    item.topic,
-    item.angle ? `Angle: ${item.angle}` : "",
-    item.demandReason ? `Demand signal: ${item.demandReason}` : "",
-    item.evidenceUrls?.length ? `Evidence: ${item.evidenceUrls.join(", ")}` : ""
-  ].filter(Boolean).join("\n");
+function cleanTopic(topic) {
+  return String(topic || "Practical electrical engineering discussion")
+    .split(/\r?\n/)[0]
+    .replace(/\s+(Angle|Demand signal|Evidence):.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizeTarget(target) {

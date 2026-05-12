@@ -507,32 +507,35 @@ export async function generateDialogueReply({ message, fastMemory, recentMessage
 }
 
 function fallbackDraft(topic, finding, _reason, target = "all") {
-  const cleanTopic = String(topic || "high-voltage power system engineering").replace(/\s+/g, " ").trim();
+  const cleanTopic = cleanPostTopic(topic);
   const sourceLine = finding?.url ? `\nReference: ${finding.url}` : "";
 
   if (isRenewableComparisonTopic(cleanTopic)) {
     return ensurePlatformLength(renewableComparisonPost(target, sourceLine), { topic: cleanTopic, target });
   }
+  if (isDroneDataTopic(cleanTopic)) {
+    return ensurePlatformLength(droneDataPost(cleanTopic, sourceLine, target), { topic: cleanTopic, target });
+  }
 
   if (target === "threads") {
-    return `500 kV GIS projects are rarely limited by one calculation. The real risk is integration: IEC 61850 signals, protection zones, interlocks, SCADA mapping, and field test evidence all have to match the actual substation.`;
+    return `${cleanTopic}: the engineering value is in the practical details, not only in the headline. The key question is what this changes for design decisions, reliability, grid integration, equipment selection, or project risk.`;
   }
 
   if (target === "instagram") {
     return [
       `A practical view on ${cleanTopic}.`,
       "",
-      "For high-voltage substations, the engineering value is in the interfaces:",
+      "For power engineering teams, the useful questions are:",
       "",
-      "* protection zones",
-      "* IEC 61850 signal mapping",
-      "* CT/VT verification",
-      "* interlocking logic",
-      "* commissioning evidence",
+      "* what changes in design assumptions?",
+      "* what risks appear during operation?",
+      "* what calculations need to be checked?",
+      "* what equipment constraints matter?",
+      "* what should be verified before approval?",
       "",
-      "The cleaner the design checks, the fewer surprises appear during energization.",
+      "Good engineering is usually the difference between an interesting headline and a reliable project.",
       "",
-      "#PowerEngineering #DigitalSubstation #GIS #ProtectionRelay #IEC61850"
+      "#PowerEngineering #ElectricalEngineering #GridIntegration #SubstationDesign #Energy"
     ].join("\n");
   }
 
@@ -540,40 +543,55 @@ function fallbackDraft(topic, finding, _reason, target = "all") {
     return [
       `${cleanTopic}: a few practical checks worth discussing.`,
       "",
-      "On large substation projects, many issues appear at the boundary between design and commissioning:",
+      "The practical engineering value is not only in the announcement itself, but in what it means for design and operation:",
       "",
-      "* the single-line diagram does not fully match field wiring or bay logic;",
-      "* IEC 61850 datasets and GOOSE messages are tested only on paper;",
-      "* relay settings, SCADA points, and interlocking logic are reviewed separately instead of as one system;",
-      "* field changes are not reflected back into the calculation package.",
+      "* does it change grid connection requirements?",
+      "* does it affect transformer, switchgear, protection, or control system selection?",
+      "* does it introduce new constraints for short-circuit, load flow, harmonic, or reactive power studies?",
+      "* does it create commissioning, maintenance, or supply chain risks?",
       "",
-      "A structured workflow for short-circuit studies, protection coordination, and commissioning records can remove a lot of late-stage rework.",
+      "A structured engineering review helps turn industry news into practical design decisions instead of just another headline.",
       "",
-      "What is usually the hardest part on your projects: design review, relay testing, SCADA integration, or documentation?",
+      "What would you check first before applying this idea to a real project?",
       "",
-      "#PowerEngineering #Substation #IEC61850"
+      "#PowerEngineering #ElectricalEngineering #Grid"
     ].join("\n");
   }
 
+  return ensurePlatformLength(genericEngineeringPost(cleanTopic, sourceLine, target), { topic: cleanTopic, target });
+}
+
+function cleanPostTopic(topic) {
+  return String(topic || "Practical electrical engineering discussion")
+    .split(/\r?\n/)[0]
+    .replace(/\s+(Angle|Demand signal|Evidence):.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function genericEngineeringPost(topic, sourceLine, target) {
+  const companyVoice = target === "linkedin_company";
   return [
-    `${cleanTopic}: where engineering discipline matters most.`,
+    `${topic}: what engineers should look at beyond the headline.`,
     "",
-    "Commissioning a high-voltage GIS or digital substation is not only about passing individual tests. The real challenge is proving that the design, calculations, protection logic, communication model, and field installation all describe the same system.",
+    "Industry news becomes useful only when it is translated into design checks, operating constraints, and project risk. For power engineering teams, the important question is not simply what happened, but what it changes in the electrical system.",
     "",
-    "A few checks are especially important:",
+    "A practical review should usually cover:",
     "",
-    "* Validate the single-line diagram against the actual bay arrangement, CT/VT locations, interlocking philosophy, and protection zones.",
-    "* Review short-circuit levels, protection coordination, breaker failure logic, and transformer or line differential schemes before commissioning starts.",
-    "* Confirm IEC 61850 datasets, GOOSE messages, time synchronization, naming conventions, and SCADA signal mapping with real test cases, not only documentation.",
-    "* Treat cybersecurity and access control as part of the commissioning scope, especially for digital substations and remote engineering access.",
-    "* Keep calculation records, relay settings, test reports, and field markups traceable so future modifications do not depend on memory or informal notes.",
+    "* Grid connection impact: voltage regulation, available capacity, fault levels, and reactive power requirements.",
+    "* Equipment implications: transformers, switchgear, protection devices, control systems, metering, and thermal limits.",
+    "* Study requirements: load flow, short-circuit, protection coordination, harmonic assessment, and contingency cases.",
+    "* Delivery risk: supply chain constraints, commissioning complexity, maintainability, documentation quality, and operator readiness.",
+    "* Long-term reliability: how the solution behaves after the first energization, when real operating conditions replace assumptions.",
     "",
-    "For 330-750 kV projects, small inconsistencies can become expensive because many disciplines meet at the same point: primary equipment, protection, automation, telecom, civil layout, and utility requirements. A repeatable engineering calculator workflow helps keep those interfaces visible.",
+    companyVoice
+      ? "For IECCalc-style workflows, this is where structured calculation records and repeatable design checks help convert market signals into engineering decisions."
+      : "My practical takeaway: the best engineering conversations start when we stop treating news as a headline and start asking what must be verified before a project can safely operate.",
     sourceLine,
     "",
-    "What commissioning check has saved you the most trouble on a high-voltage substation project?",
+    "Which check would you put first for this topic: grid studies, equipment selection, protection coordination, commissioning, or supply chain risk?",
     "",
-    "#PowerEngineering #DigitalSubstation #GIS #IEC61850 #ProtectionCoordination"
+    "#PowerEngineering #ElectricalEngineering #GridIntegration #SubstationDesign #Energy"
   ].filter(Boolean).join("\n");
 }
 
@@ -581,6 +599,37 @@ function isRenewableComparisonTopic(topic) {
   const lower = String(topic || "").toLowerCase();
   return (lower.includes("солнеч") || lower.includes("solar"))
     && (lower.includes("ветр") || lower.includes("wind"));
+}
+
+function isDroneDataTopic(topic) {
+  const lower = String(topic || "").toLowerCase();
+  return lower.includes("drone") || lower.includes("uav") || lower.includes("field to system");
+}
+
+function droneDataPost(topic, sourceLine, target) {
+  const companyVoice = target === "linkedin_company";
+  return [
+    `${topic}: why drone data only becomes valuable when it reaches the engineering system.`,
+    "",
+    "Drones can collect impressive field data, but the real engineering value starts after the flight. Aerial inspection, thermal imagery, LiDAR, and site photos are useful only when they are connected to asset records, design drawings, maintenance history, and actionable engineering decisions.",
+    "",
+    "For substations, transmission lines, solar plants, and industrial facilities, the practical checks are clear:",
+    "",
+    "* Data quality: imagery must be georeferenced, time-stamped, and linked to the correct asset or bay, not stored as isolated folders.",
+    "* Engineering context: findings should connect to single-line diagrams, equipment lists, protection zones, cable routes, or maintenance plans.",
+    "* Workflow integration: inspection results need a path into CMMS, GIS, SCADA/asset systems, or project documentation.",
+    "* Risk prioritization: not every visual defect has the same operational consequence; engineers still need severity logic.",
+    "* Traceability: field evidence should remain usable months later when a design change, outage plan, or failure investigation starts.",
+    "",
+    companyVoice
+      ? "For IECCalc-style workflows, this reinforces a simple principle: field data is strongest when it supports repeatable engineering checks, not when it lives as a separate media archive."
+      : "My practical takeaway: drone programs should be judged less by image volume and more by how quickly the data becomes a verified engineering action.",
+    sourceLine,
+    "",
+    "Where do you see the biggest bottleneck: data capture, asset tagging, integration with engineering tools, or turning findings into maintenance decisions?",
+    "",
+    "#PowerEngineering #DroneInspection #AssetManagement #SubstationMaintenance #GridReliability"
+  ].filter(Boolean).join("\n");
 }
 
 function renewableComparisonPost(target, sourceLine = "") {

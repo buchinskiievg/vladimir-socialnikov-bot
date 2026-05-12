@@ -4,7 +4,7 @@ import { insertDraft, listDraftsByStatus, readDraft, updateDraftImage, updateDra
 export async function createDraftFromTopic(topic, context) {
   const id = crypto.randomUUID().slice(0, 8);
   const target = context.target || "all";
-  const text = await generateDraftText(topic, context.env, null, target);
+  const text = await generateDraftText(topic, context.env, context.finding || null, target);
   const draft = {
     id,
     topic,
