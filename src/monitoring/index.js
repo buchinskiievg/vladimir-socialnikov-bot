@@ -129,7 +129,6 @@ async function notifyDemandDrafts(env, demandResult) {
   const chatId = env.TELEGRAM_REPORT_CHAT_ID || firstAllowedUser(env);
   if (!chatId) return;
 
-  await sendTelegramMessage(env, chatId, "Нашел самые ценные темы и подготовил финальные посты на approval:", { parse_mode: undefined });
   for (const draft of demandResult.drafts) {
     await sendTelegramMessage(env, chatId, formatDraft(draft).text, formatDraft(draft).options);
   }
@@ -137,17 +136,7 @@ async function notifyDemandDrafts(env, demandResult) {
 
 function formatDraft(draft) {
   return {
-    text: [
-      `Post ${draft.id} - ready for approval`,
-      `Topic: ${compactTopic(draft.topic)}`,
-      `Target: ${draft.target || "all"}`,
-      draft.imageUrl ? `Image: ${draft.imageUrl}` : null,
-      "",
-      draft.text,
-      "",
-      `Approve: /approve ${draft.id}`,
-      `Reject: /reject ${draft.id}`
-    ].filter((line) => line !== null).join("\n").slice(0, 3900),
+    text: draft.text.slice(0, 3900),
     options: {
       parse_mode: undefined,
       photoUrl: draft.imageUrl || undefined,

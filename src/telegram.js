@@ -25,26 +25,8 @@ export async function handleTelegramWebhook(request, env, ctx) {
     return Response.json({ ok: true });
   }
 
-  if (shouldSendProcessingAck(message.text)) {
-    ctx.waitUntil(sendTelegramMessage(
-      env,
-      message.chat.id,
-      "Принял, готовлю финальный пост и инфографику. Публиковать ничего не буду."
-    ));
-  }
   ctx.waitUntil(handleTelegramMessageAsync(message, { env, update }));
-
   return Response.json({ ok: true });
-}
-
-function shouldSendProcessingAck(text) {
-  const lower = String(text || "").toLowerCase();
-  if (lower.startsWith("/")) return false;
-  return lower.includes("подготов")
-    || lower.includes("пост")
-    || lower.includes("публикац")
-    || lower.includes("инфограф")
-    || lower.includes("linkedin");
 }
 
 async function handleTelegramMessageAsync(message, context) {

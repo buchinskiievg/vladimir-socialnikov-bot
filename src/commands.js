@@ -186,17 +186,7 @@ function formatPublishResult(result) {
 
 function formatDraft(draft) {
   return {
-    text: [
-    `Post ${draft.id} - ready for approval`,
-    `Topic: ${draft.topic}`,
-    `Target: ${draft.target || "all"}`,
-    draft.imageUrl ? `Image: ${draft.imageUrl}` : null,
-    "",
-    draft.text,
-    "",
-    `Approve: /approve ${draft.id}`,
-    `Reject: /reject ${draft.id}`
-    ].filter((line) => line !== null).join("\n"),
+    text: draft.text,
     options: {
       photoUrl: draft.imageUrl || undefined,
       reply_markup: {
@@ -217,9 +207,7 @@ function draftButtons(id) {
 
 function formatDraftBrief(draft) {
   return [
-    `Post ${draft.id} - waiting for approval`,
-    `Topic: ${draft.topic}`,
-    draft.imageUrl ? `Image: ${draft.imageUrl}` : null,
+    `${draft.id} | ${draft.target || "all"} | ${draft.topic}`,
     draft.text.slice(0, 300)
   ].filter(Boolean).join("\n");
 }
@@ -416,20 +404,6 @@ function overrideTargetsFromText(text, targets) {
 }
 
 function formatMultipleDrafts(drafts) {
-  const lines = [`Prepared ${drafts.length} final post${drafts.length === 1 ? "" : "s"} for approval.`];
-  for (const draft of drafts) {
-    lines.push(
-      "",
-      `Post ${draft.id} - ready for approval`,
-      `Topic: ${draft.topic}`,
-      `Target: ${draft.target || "all"}`,
-      draft.imageUrl ? `Image: ${draft.imageUrl}` : null,
-      "",
-      draft.text,
-      "",
-      `Approve: /approve ${draft.id}`,
-      `Reject: /reject ${draft.id}`
-    );
-  }
-  return lines.filter((line) => line !== null).join("\n");
+  if (drafts.length === 1) return formatDraft(drafts[0]);
+  return { messages: drafts.map(formatDraft) };
 }

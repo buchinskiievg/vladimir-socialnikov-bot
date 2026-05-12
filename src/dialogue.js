@@ -263,19 +263,8 @@ function overrideTargetsFromText(text, targets) {
 function formatDrafts(drafts) {
   return {
     messages: [
-      `Готово: подготовил ${drafts.length} финальный пост(а) на проверку.`,
       ...drafts.map((draft) => ({
-        text: [
-          `Post ${draft.id} - ready for approval`,
-          `Topic: ${draft.topic}`,
-          `Target: ${draft.target || "all"}`,
-          draft.imageUrl ? `Image: ${draft.imageUrl}` : null,
-          "",
-          draft.text,
-          "",
-          `Approve: /approve ${draft.id}`,
-          `Reject: /reject ${draft.id}`
-        ].filter((line) => line !== null).join("\n"),
+        text: draft.text,
         options: {
           photoUrl: draft.imageUrl || undefined,
           reply_markup: {
