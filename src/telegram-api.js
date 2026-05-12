@@ -66,14 +66,21 @@ async function sendTelegramPhoto(env, chatId, photoUrl, caption) {
 
 async function sendTelegramDocument(env, chatId, documentUrl, caption) {
   const token = env.TELEGRAM_BOT_TOKEN;
+  const documentResponse = await fetch(documentUrl);
+  if (!documentResponse.ok) {
+    throw new Error(`Telegram document fetch failed: ${documentResponse.status}`);
+  }
+
+  const contentType = documentResponse.headers.get("content-type") || "application/octet-stream";
+  const extension = contentType.includes("svg") ? "svg" : "bin";
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  form.append("caption", String(caption || "").slice(0, 1024));
+  form.append("document", await documentResponse.blob(), `infographic.${extension}`);
+
   const response = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      document: documentUrl,
-      caption: String(caption || "").slice(0, 1024)
-    })
+    body: form
   });
 
   if (!response.ok) {
