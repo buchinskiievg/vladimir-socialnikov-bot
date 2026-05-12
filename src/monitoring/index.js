@@ -1,6 +1,7 @@
 import { insertLead } from "../storage/leads.js";
 import { listSources, updateSourceCheckedAt } from "../storage/sources.js";
 import { fetchRssItems } from "./rss.js";
+import { fetchHtmlItems } from "./html-list.js";
 import { enrichItem } from "./thread-scanner.js";
 import { insertScanRun } from "../storage/scan-runs.js";
 import { createDraftsFromDemand } from "../workflows/demand.js";
@@ -35,9 +36,7 @@ export async function runMonitoringCycle(env, event) {
     };
 
     try {
-      const items = source.type === "rss" || source.type === "news" || source.type === "reddit"
-        ? await fetchRssItems(source)
-        : [];
+      const items = await fetchSourceItems(source, env);
       stats.itemsFound = items.length;
 
       for (const rawItem of items) {
@@ -146,6 +145,27 @@ function filterSources(sources, event = {}) {
   return limit > 0 ? sliced.slice(0, limit) : sliced;
 }
 
+async function fetchSourceItems(source, env) {
+  if (source.type === "rss" || source.type === "reddit") {
+    return await fetchRssItems(source);
+  }
+
+  if (source.type === "news") {
+    try {
+      return await fetchRssItems(source);
+    } catch (error) {
+      console.log(JSON.stringify({ ok: false, job: "news-rss-fallback", source: source.id, error: error.message }));
+      return await fetchHtmlItems(source, env);
+    }
+  }
+
+  if (["forum", "classifieds", "facebook", "facebook_group"].includes(source.type)) {
+    return await fetchHtmlItems(source, env);
+  }
+
+  return [];
+}
+
 async function notifyDemandDrafts(env, demandResult) {
   const chatId = env.TELEGRAM_REPORT_CHAT_ID || firstAllowedUser(env);
   if (!chatId) return;
@@ -176,8 +196,7 @@ function formatDraft(draft) {
 function formatApprovalHeader(draft) {
   return [
     `For approval: ${formatTargetLabel(draft.target)}`,
-    `Account: ${formatAccountLabel(draft.target)}`,
-    `Post ID: ${draft.id}`
+    `Account: ${formatAccountLabel(draft.target)}`
   ].join("\n");
 }
 

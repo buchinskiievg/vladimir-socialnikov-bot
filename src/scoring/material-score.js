@@ -16,17 +16,19 @@ export async function scoreMaterial(item, source, env) {
   const softwareScore = scoreSoftwareInterest(lower, platform);
   const gridBuildScore = scoreGridBuildInterest(lower);
   const oemScore = scoreOemEquipmentInterest(lower);
+  const strategicScore = scoreStrategicPriority(lower);
 
   const total = Math.round(
-    topicScore * 0.25 +
-    importanceScore * 0.22 +
-    popularityScore * 0.18 +
-    materialScore * 0.14 +
-    freshnessScore * 0.11 +
-    leadScore * 0.10 +
-    softwareScore * 0.10 +
-    gridBuildScore * 0.16 +
-    oemScore * 0.14
+    topicScore * 0.23 +
+    importanceScore * 0.20 +
+    popularityScore * 0.14 +
+    materialScore * 0.12 +
+    freshnessScore * 0.10 +
+    leadScore * 0.08 +
+    softwareScore * 0.18 +
+    gridBuildScore * 0.24 +
+    oemScore * 0.18 +
+    strategicScore * 0.22
   );
 
   return {
@@ -41,7 +43,8 @@ export async function scoreMaterial(item, source, env) {
       lead: leadScore,
       software: softwareScore,
       gridBuild: gridBuildScore,
-      oem: oemScore
+      oem: oemScore,
+      strategic: strategicScore
     },
     matchedTopics: matchTopics(lower, topics).slice(0, 3)
   };
@@ -76,36 +79,45 @@ export function scoreLeadPotential(text) {
 }
 
 function scoreSoftwareInterest(text, platform) {
-  const base = platform === "facebook" ? 12 : platform === "linkedin" ? 10 : 0;
+  const base = platform === "facebook" ? 18 : platform === "linkedin" ? 16 : 4;
   return Math.min(100, base + cappedScore(text, [
-    ["etap", 28],
-    ["digSilent".toLowerCase(), 26],
-    ["powerfactory", 26],
+    ["etap", 34],
+    ["digSilent".toLowerCase(), 32],
+    ["powerfactory", 32],
     ["skm", 24],
     ["easypower", 24],
     ["cyme", 22],
-    ["pss/e", 22],
-    ["psse", 22],
+    ["pss/e", 26],
+    ["psse", 26],
     ["pvsyst", 22],
     ["helioscope", 20],
     ["homer pro", 18],
     ["neplan", 18],
-    ["pscad", 18],
+    ["pscad", 26],
+    ["neplan", 22],
+    ["powerworld", 20],
+    ["gridmo", 18],
     ["matlab", 12],
     ["simulink", 12],
-    ["software", 16],
-    ["tool", 12],
+    ["software", 22],
+    ["software review", 30],
+    ["feature", 18],
+    ["function", 16],
+    ["tool", 16],
     ["calculator", 18],
     ["template", 16],
     ["spreadsheet", 14],
     ["compare", 12],
     ["review", 14],
     ["workflow", 14],
-    ["load flow", 18],
-    ["short circuit", 18],
-    ["arc flash", 18],
-    ["protection coordination", 20],
-    ["relay coordination", 20]
+    ["load flow", 24],
+    ["power flow", 22],
+    ["short circuit", 24],
+    ["arc flash", 24],
+    ["protection coordination", 28],
+    ["relay coordination", 28],
+    ["iec 60909", 30],
+    ["iec 61850", 26]
   ]));
 }
 
@@ -139,6 +151,7 @@ function scoreImportance(text, sourceType) {
     ["interconnection", 14],
     ["substation", 16],
     ["transformer", 13],
+    ["power transformer", 18],
     ["switchgear", 13],
     ["protection", 14],
     ["short circuit", 18],
@@ -159,27 +172,34 @@ function scoreImportance(text, sourceType) {
 
 function scoreGridBuildInterest(text) {
   return cappedScore(text, [
-    ["330 kv", 20],
-    ["345 kv", 20],
-    ["400 kv", 18],
-    ["500 kv", 24],
-    ["550 kv", 24],
-    ["735 kv", 24],
-    ["750 kv", 28],
-    ["765 kv", 30],
+    ["330 kv", 36],
+    ["345 kv", 34],
+    ["400 kv", 34],
+    ["500 kv", 42],
+    ["525 kv", 38],
+    ["550 kv", 38],
+    ["735 kv", 42],
+    ["750 kv", 48],
+    ["765 kv", 50],
     ["800 kv", 30],
     ["1100 kv", 30],
     ["±500", 22],
     ["±800", 28],
-    ["hvdc", 26],
-    ["uhv", 26],
-    ["ehv", 18],
-    ["transmission line", 18],
-    ["grid expansion", 20],
-    ["substation construction", 22],
+    ["hvdc", 38],
+    ["uhv", 36],
+    ["ehv", 30],
+    ["transmission line", 30],
+    ["transmission project", 34],
+    ["grid expansion", 34],
+    ["grid upgrade", 30],
+    ["substation construction", 38],
+    ["new substation", 34],
+    ["greenfield substation", 34],
+    ["energized", 24],
+    ["commissioned", 24],
     ["converter station", 22],
-    ["gis", 14],
-    ["gas-insulated switchgear", 22],
+    ["gis", 22],
+    ["gas-insulated switchgear", 30],
     ["breaker-and-a-half", 18],
     ["500/230", 22],
     ["500/115", 20],
@@ -187,23 +207,31 @@ function scoreGridBuildInterest(text) {
     ["500-kv", 24],
     ["750-kv", 28],
     ["major transmission", 18],
-    ["large power transformer", 18],
-    ["transformer bank", 18]
+    ["large power transformer", 30],
+    ["transformer bank", 26],
+    ["grid interconnection", 26],
+    ["substation project", 34],
+    ["interconnector", 28]
   ]);
 }
 
 function scoreOemEquipmentInterest(text) {
   return cappedScore(text, [
-    ["abb", 18],
-    ["siemens", 18],
-    ["siemens energy", 24],
-    ["hitachi", 18],
-    ["hitachi energy", 26],
-    ["alstom", 14],
-    ["alstom grid", 18],
-    ["ge vernova", 22],
-    ["ge grid", 18],
-    ["schneider electric", 20],
+    ["abb", 24],
+    ["siemens", 22],
+    ["siemens energy", 32],
+    ["hitachi", 22],
+    ["hitachi energy", 34],
+    ["alstom", 20],
+    ["alstom grid", 24],
+    ["ge vernova", 30],
+    ["ge grid", 22],
+    ["schneider electric", 26],
+    ["sel", 20],
+    ["eaton", 20],
+    ["mitsubishi electric", 22],
+    ["toshiba", 18],
+    ["hyundai electric", 22],
     ["econiQ".toLowerCase(), 24],
     ["sf6-free", 26],
     ["sf₆-free", 26],
@@ -217,11 +245,36 @@ function scoreOemEquipmentInterest(text) {
     ["switchgear manufacturing", 20],
     ["grid equipment", 18],
     ["equipment order", 14],
-    ["new product", 12],
-    ["unveiled", 12],
-    ["commissioned", 16],
-    ["energized", 16]
+    ["new product", 22],
+    ["product launch", 24],
+    ["unveiled", 22],
+    ["commissioned", 20],
+    ["energized", 20],
+    ["factory expansion", 22],
+    ["manufacturing capacity", 22]
   ]);
+}
+
+function scoreStrategicPriority(text) {
+  return Math.max(
+    scoreGridBuildInterest(text),
+    scoreSoftwareInterest(text, "linkedin"),
+    scoreOemEquipmentInterest(text),
+    cappedScore(text, [
+      ["data center load", 28],
+      ["grid congestion", 24],
+      ["transformer shortage", 36],
+      ["supply chain", 22],
+      ["interconnection queue", 26],
+      ["blackout", 24],
+      ["system operator", 18],
+      ["utility scale", 14],
+      ["protection relay", 22],
+      ["commissioning", 20],
+      ["substation automation", 24],
+      ["digital substation", 28]
+    ])
+  );
 }
 
 function scorePopularity(text) {

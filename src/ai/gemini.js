@@ -398,6 +398,9 @@ export async function generateDemandTopics({ findings }, env) {
               "Return only valid compact JSON.",
               "Prefer practical pain points: questions, repeated confusion, design choices, calculations, standards, tools, failures.",
               "Also prioritize major grid construction and OEM equipment news: 330-750 kV substations, EHV/UHV/HVDC lines, transformers, GIS, breakers, SF6-free gear, digital substations, and announcements from ABB, Siemens Energy, Hitachi Energy, GE Vernova, Schneider Electric, Alstom Grid, and similar brands.",
+              "For LinkedIn and Facebook, strongly consider engineering software content when evidence exists: ETAP, DIgSILENT PowerFactory, PSCAD, PSS/E, SKM, EasyPower, CYME, load-flow, short-circuit, arc-flash, protection coordination, IEC 60909, IEC 61850, and practical feature reviews.",
+              "Avoid solar-only selection unless the solar item is clearly the strongest available signal. Keep a balanced mix of traditional power systems, EHV grids, substations, transformers, OEM equipment, software workflows, and renewables.",
+              "When two findings have similar scores, choose the one closer to 330-750 kV grids, major substation construction, transformer supply, OEM equipment, or engineering software functionality.",
               "Do not invent demand that is not supported by the findings."
             ].join(" ")
           }]

@@ -208,8 +208,7 @@ function draftButtons(id) {
 function formatApprovalHeader(draft) {
   return [
     `For approval: ${formatTargetLabel(draft.target)}`,
-    `Account: ${formatAccountLabel(draft.target)}`,
-    `Post ID: ${draft.id}`
+    `Account: ${formatAccountLabel(draft.target)}`
   ].join("\n");
 }
 
