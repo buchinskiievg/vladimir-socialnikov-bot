@@ -254,13 +254,15 @@ function formatDrafts(drafts) {
           `Post ${draft.id} - ready for approval`,
           `Topic: ${draft.topic}`,
           `Target: ${draft.target || "all"}`,
+          draft.imageUrl ? `Image: ${draft.imageUrl}` : null,
           "",
           draft.text,
           "",
           `Approve: /approve ${draft.id}`,
           `Reject: /reject ${draft.id}`
-        ].join("\n"),
+        ].filter((line) => line !== null).join("\n"),
         options: {
+          photoUrl: draft.imageUrl || undefined,
           reply_markup: {
             inline_keyboard: draftButtons(draft.id)
           }

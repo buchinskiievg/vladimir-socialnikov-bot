@@ -7,9 +7,20 @@ export async function insertDraft(env, draft) {
   }
 
   await env.DB.prepare(
-    "insert into drafts (id, topic, text, status, source, created_at, target) values (?, ?, ?, ?, ?, ?, ?)"
+    "insert into drafts (id, topic, text, status, source, created_at, target, image_url, image_key, image_prompt) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   )
-    .bind(draft.id, draft.topic, draft.text, draft.status, draft.source, draft.createdAt, draft.target || "all")
+    .bind(
+      draft.id,
+      draft.topic,
+      draft.text,
+      draft.status,
+      draft.source,
+      draft.createdAt,
+      draft.target || "all",
+      draft.imageUrl || null,
+      draft.imageKey || null,
+      draft.imagePrompt || null
+    )
     .run();
 }
 
@@ -66,6 +77,9 @@ function fromRow(row) {
     status: row.status,
     source: row.source,
     createdAt: row.created_at,
-    target: row.target || "all"
+    target: row.target || "all",
+    imageUrl: row.image_url || "",
+    imageKey: row.image_key || "",
+    imagePrompt: row.image_prompt || ""
   };
 }

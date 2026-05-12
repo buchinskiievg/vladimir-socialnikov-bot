@@ -2,14 +2,19 @@ import { publishToSocials } from "../social/index.js";
 import { insertDraft, listDraftsByStatus, readDraft, updateDraftStatus, updateDraftText } from "../storage/drafts.js";
 
 export async function createDraftFromTopic(topic, context) {
+  const id = crypto.randomUUID().slice(0, 8);
+  const target = context.target || "all";
+  const text = await generateDraftText(topic, context.env, null, target);
+  const image = await generateDraftImage({ id, topic, text, target }, context.env);
   const draft = {
-    id: crypto.randomUUID().slice(0, 8),
+    id,
     topic,
-    text: await generateDraftText(topic, context.env, null, context.target || "all"),
+    text,
     status: "pending",
-    target: context.target || "all",
+    target,
     source: "telegram",
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    ...image
   };
 
   await insertDraft(context.env, draft);
@@ -40,7 +45,11 @@ export async function approveDraft(id, context) {
   if (!draft) return { ok: false, message: `Post ${id} not found.` };
   if (draft.status !== "pending") return { ok: false, message: `Post ${id} is ${draft.status}.` };
 
-  const publishResult = await publishToSocials({ text: draft.text, target: draft.target || "all" }, context.env);
+  const publishResult = await publishToSocials({
+    text: draft.text,
+    target: draft.target || "all",
+    imageUrl: draft.imageUrl || ""
+  }, context.env);
   await updateDraftStatus(context.env, id, publishResult.ok ? "published" : "publish_failed");
 
   const lines = [`Post ${id}: ${publishResult.ok ? "published" : "publish failed"}`];
@@ -60,18 +69,34 @@ export async function rejectDraft(id, env) {
 
 export async function createDraftFromFinding(finding, env) {
   const topic = finding.topic || "industry news";
+  const id = crypto.randomUUID().slice(0, 8);
+  const target = finding.target || "all";
+  const text = await generateDraftText(topic, env, finding, target);
+  const image = await generateDraftImage({ id, topic, text, target }, env);
   const draft = {
-    id: crypto.randomUUID().slice(0, 8),
+    id,
     topic,
-    text: await generateDraftText(topic, env, finding, finding.target || "all"),
+    text,
     status: "pending",
-    target: finding.target || "all",
+    target,
     source: finding.url || "monitoring",
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    ...image
   };
 
   await insertDraft(env, draft);
   return draft;
+}
+
+async function generateDraftImage({ id, topic, text, target }, env) {
+  try {
+    const { generateInfographicForPost } = await import("../ai/images.js");
+    return await generateInfographicForPost({ id, topic, text, target }, env) || {};
+  } catch (error) {
+    return {
+      imagePrompt: `Image generation failed: ${error.message}`
+    };
+  }
 }
 
 async function generateDraftText(topic, env, finding = null, target = "all") {

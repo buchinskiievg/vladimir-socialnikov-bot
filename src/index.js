@@ -8,6 +8,11 @@ export default {
       return Response.json({ ok: true, bot: env.BOT_NAME || "telegram-worker-bot" });
     }
 
+    if (request.method === "GET" && url.pathname.startsWith("/media/")) {
+      const { handleMediaRequest } = await import("./media.js");
+      return handleMediaRequest(request, env);
+    }
+
     if (request.method === "GET" && url.pathname === "/linkedin/auth") {
       const { handleLinkedInAuth } = await import("./oauth/linkedin.js");
       return handleLinkedInAuth(request, env);

@@ -190,13 +190,15 @@ function formatDraft(draft) {
     `Post ${draft.id} - ready for approval`,
     `Topic: ${draft.topic}`,
     `Target: ${draft.target || "all"}`,
+    draft.imageUrl ? `Image: ${draft.imageUrl}` : null,
     "",
     draft.text,
     "",
     `Approve: /approve ${draft.id}`,
     `Reject: /reject ${draft.id}`
-    ].join("\n"),
+    ].filter((line) => line !== null).join("\n"),
     options: {
+      photoUrl: draft.imageUrl || undefined,
       reply_markup: {
         inline_keyboard: draftButtons(draft.id)
       }
@@ -214,7 +216,12 @@ function draftButtons(id) {
 }
 
 function formatDraftBrief(draft) {
-  return [`Post ${draft.id} - waiting for approval`, `Topic: ${draft.topic}`, draft.text.slice(0, 300)].join("\n");
+  return [
+    `Post ${draft.id} - waiting for approval`,
+    `Topic: ${draft.topic}`,
+    draft.imageUrl ? `Image: ${draft.imageUrl}` : null,
+    draft.text.slice(0, 300)
+  ].filter(Boolean).join("\n");
 }
 
 function formatLeadBrief(lead) {
@@ -401,6 +408,7 @@ function formatMultipleDrafts(drafts) {
       `Post ${draft.id} - ready for approval`,
       `Topic: ${draft.topic}`,
       `Target: ${draft.target || "all"}`,
+      draft.imageUrl ? `Image: ${draft.imageUrl}` : null,
       "",
       draft.text,
       "",
@@ -408,5 +416,5 @@ function formatMultipleDrafts(drafts) {
       `Reject: /reject ${draft.id}`
     );
   }
-  return lines.join("\n");
+  return lines.filter((line) => line !== null).join("\n");
 }
