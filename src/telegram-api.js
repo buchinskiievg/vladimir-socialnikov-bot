@@ -5,9 +5,18 @@ export async function sendTelegramMessage(env, chatId, text, options = {}) {
   }
 
   if (options.photoUrl) {
-    await sendTelegramPhoto(env, chatId, options.photoUrl, "Image preview");
     const { photoUrl: _photoUrl, ...messageOptions } = options;
-    return sendTelegramMessage(env, chatId, text, messageOptions);
+    try {
+      await sendTelegramPhoto(env, chatId, options.photoUrl, "Image preview");
+      return sendTelegramMessage(env, chatId, text, messageOptions);
+    } catch (error) {
+      return sendTelegramMessage(
+        env,
+        chatId,
+        `${text}\n\nImage preview link: ${options.photoUrl}\nTelegram image preview failed: ${error.message}`,
+        messageOptions
+      );
+    }
   }
 
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {

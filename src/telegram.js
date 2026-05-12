@@ -26,7 +26,11 @@ export async function handleTelegramWebhook(request, env, ctx) {
   }
 
   if (shouldSendProcessingAck(message.text)) {
-    ctx.waitUntil(sendTelegramMessage(env, message.chat.id, "Принял, готовлю финальный пост и инфографику. Публиковать ничего не буду."));
+    ctx.waitUntil(sendTelegramMessage(
+      env,
+      message.chat.id,
+      "Принял, готовлю финальный пост и инфографику. Публиковать ничего не буду."
+    ));
   }
   ctx.waitUntil(handleTelegramMessageAsync(message, { env, update }));
 
@@ -36,7 +40,11 @@ export async function handleTelegramWebhook(request, env, ctx) {
 function shouldSendProcessingAck(text) {
   const lower = String(text || "").toLowerCase();
   if (lower.startsWith("/")) return false;
-  return lower.includes("подготов") || lower.includes("пост") || lower.includes("публикац") || lower.includes("инфограф") || lower.includes("linkedin");
+  return lower.includes("подготов")
+    || lower.includes("пост")
+    || lower.includes("публикац")
+    || lower.includes("инфограф")
+    || lower.includes("linkedin");
 }
 
 async function handleTelegramMessageAsync(message, context) {

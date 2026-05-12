@@ -62,10 +62,12 @@ async function generateGeminiImage(prompt, env) {
 
 function buildInfographicPrompt({ topic, text, target }) {
   return [
-    "Generate a clean square engineering infographic image for a professional social media post.",
+    "Generate a clean square engineering infographic image for a professional social media post. The infographic must fill the entire image canvas.",
     "Audience: electrical power engineers, substation designers, power system consultants.",
-    "Style: modern technical infographic, white/light background, restrained colors, IEC/utility engineering feel, no cartoon style, no people, no brand logos.",
+    "Style: modern technical infographic, light technical background with restrained contrast, IEC/utility engineering feel, no cartoon style, no people, no brand logos.",
     "Format: 1:1 square, suitable for LinkedIn, Facebook, Instagram.",
+    "Layout: use a large central technical diagram occupying at least 75% of the canvas, with supporting callout blocks around it. No tiny icon in the middle. No excessive empty white margins.",
+    "Composition: make the substation/grid/single-line elements visually prominent, full-frame, and balanced from edge to edge.",
     "Content: show a clear visual concept using simplified single-line diagram elements, grid/substation/capacitor bank/protection/software blocks when relevant.",
     "Text in image: English only. Use very little text, maximum 5 short labels, large and legible. Avoid long paragraphs.",
     "Do not include fake standards numbers, fake company logos, watermarks, signatures, QR codes, or contact details.",
