@@ -157,7 +157,7 @@ async function notifyDemandDrafts(env, demandResult) {
 
 function formatDraft(draft) {
   return {
-    text: draft.text.slice(0, 3900),
+    text: `${formatApprovalHeader(draft)}\n\n${draft.text}`.slice(0, 3900),
     options: {
       parse_mode: undefined,
       photoUrl: draft.imageUrl || undefined,
@@ -171,6 +171,40 @@ function formatDraft(draft) {
       }
     }
   };
+}
+
+function formatApprovalHeader(draft) {
+  return [
+    `For approval: ${formatTargetLabel(draft.target)}`,
+    `Account: ${formatAccountLabel(draft.target)}`,
+    `Post ID: ${draft.id}`
+  ].join("\n");
+}
+
+function formatTargetLabel(target) {
+  const labels = {
+    linkedin_personal: "LinkedIn personal profile",
+    linkedin_company: "LinkedIn company page",
+    facebook: "Facebook page",
+    instagram: "Instagram account",
+    threads: "Threads account",
+    reddit: "Reddit",
+    all: "All connected channels"
+  };
+  return labels[target || "all"] || target || "All connected channels";
+}
+
+function formatAccountLabel(target) {
+  const labels = {
+    linkedin_personal: "Evgenii Buchinskii",
+    linkedin_company: "IECCalc",
+    facebook: "ieccalc.com",
+    instagram: "IECCalc engineering account",
+    threads: "Threads via connected account",
+    reddit: "connected Reddit account",
+    all: "configured accounts"
+  };
+  return labels[target || "all"] || "configured account";
 }
 
 function compactTopic(topic) {

@@ -346,7 +346,7 @@ function overrideTargetsFromText(text, targets) {
 function formatDrafts(drafts) {
   return {
     messages: drafts.map((draft) => ({
-      text: draft.text,
+      text: `${formatApprovalHeader(draft)}\n\n${draft.text}`,
       options: {
         photoUrl: draft.imageUrl || undefined,
         reply_markup: {
@@ -355,6 +355,40 @@ function formatDrafts(drafts) {
       }
     }))
   };
+}
+
+function formatApprovalHeader(draft) {
+  return [
+    `For approval: ${formatTargetLabel(draft.target)}`,
+    `Account: ${formatAccountLabel(draft.target)}`,
+    `Post ID: ${draft.id}`
+  ].join("\n");
+}
+
+function formatTargetLabel(target) {
+  const labels = {
+    linkedin_personal: "LinkedIn personal profile",
+    linkedin_company: "LinkedIn company page",
+    facebook: "Facebook page",
+    instagram: "Instagram account",
+    threads: "Threads account",
+    reddit: "Reddit",
+    all: "All connected channels"
+  };
+  return labels[target || "all"] || target || "All connected channels";
+}
+
+function formatAccountLabel(target) {
+  const labels = {
+    linkedin_personal: "Evgenii Buchinskii",
+    linkedin_company: "IECCalc",
+    facebook: "ieccalc.com",
+    instagram: "IECCalc engineering account",
+    threads: "Threads via connected account",
+    reddit: "connected Reddit account",
+    all: "configured accounts"
+  };
+  return labels[target || "all"] || "configured account";
 }
 
 function draftButtons(id) {
