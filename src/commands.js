@@ -382,7 +382,7 @@ function cleanupTopic(topic) {
 }
 
 function normalizeTargets(targets) {
-  const valid = new Set(["linkedin_personal", "linkedin_company", "all"]);
+  const valid = new Set(["linkedin_personal", "linkedin_company", "facebook", "instagram", "threads", "reddit", "all"]);
   const result = [...new Set((targets || []).filter((target) => valid.has(target)))];
   if (result.includes("all")) return ["all"];
   return result.length ? result : ["all"];
@@ -390,6 +390,11 @@ function normalizeTargets(targets) {
 
 function overrideTargetsFromText(text, targets) {
   const lower = String(text || "").toLowerCase();
+  const explicit = [];
+  if (lower.includes("facebook") || lower.includes("фейсбук")) explicit.push("facebook");
+  if (lower.includes("instagram") || lower.includes("инстаграм")) explicit.push("instagram");
+  if (lower.includes("threads")) explicit.push("threads");
+  if (lower.includes("reddit")) explicit.push("reddit");
   const mentionsLinkedIn = lower.includes("linkedin") || lower.includes("линкедин") || lower.includes("linked in");
   const companyOnly = mentionsLinkedIn
     && (lower.includes("компани") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company"))
@@ -400,6 +405,7 @@ function overrideTargetsFromText(text, targets) {
 
   if (companyOnly) return ["linkedin_company"];
   if (personalOnly) return ["linkedin_personal"];
+  if (explicit.length) return [...new Set(explicit)];
   return targets;
 }
 

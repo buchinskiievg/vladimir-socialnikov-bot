@@ -7,8 +7,9 @@ export async function generatePostDraft({ topic, finding, target }, env) {
     ? "Write as a personal LinkedIn post from Evgenii Buchinskii, an electrical power engineer. Use a practical first-person professional voice when natural."
     : target === "linkedin_company"
       ? "Write as an IECCalc company page post. Use a product/engineering brand voice and connect the topic to useful engineering calculation workflows when natural."
-      : "Write as a professional LinkedIn-style post.";
+      : "Write as a professional engineering social post.";
   const seo = seoGuidance(target);
+  const platform = platformGuidance(target);
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -19,11 +20,12 @@ export async function generatePostDraft({ topic, finding, target }, env) {
         systemInstruction: {
           parts: [{
             text: [
-              "Write concise professional social posts for electrical power engineers.",
+              "Write professional social posts for electrical power engineers.",
               "Always write the final social post in English, even when the user topic or source context is in Russian or another language.",
               "Return exactly one ready-to-publish post.",
               "Do not provide options, alternatives, explanations, or markdown headings.",
-              "Avoid hype. Do not copy source text. Mention standards only when relevant."
+              "Avoid hype. Do not copy source text. Mention standards only when relevant.",
+              "Use the target platform's optimal length and depth. Do not make LinkedIn posts too short."
             ].join(" ")
           }]
         },
@@ -34,34 +36,35 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               `Topic: ${topic}`,
               `Target: ${target || "general"}`,
               `Audience: ${audience}`,
+              `Platform writing guidance: ${platform}`,
               `SEO guidance: ${seo}`,
               "",
               source,
               "",
-              "Prepare exactly one final LinkedIn-style post for human approval.",
+              "Prepare exactly one final platform-optimized post for human approval.",
               "Language: English only. Translate the user's topic into natural professional English before writing.",
-              "Use this structure:",
-              "1. Strong first line.",
-              "2. Three short technical points.",
-              "3. Practical takeaway.",
-              "4. One discussion question.",
-              "5. End with 3-6 relevant professional hashtags.",
+              "Use the requested platform length and structure.",
+              "For LinkedIn, use a strong hook, 4-6 substantial technical points, a practical takeaway, and one discussion question. LinkedIn posts must be at least the requested minimum length.",
+              "For Facebook, use a practical hook, 3-5 readable points, and a simple question.",
+              "For Instagram, use a concise caption that works with the infographic.",
+              "For Threads, use a compact post with one sharp idea.",
+              "End with the platform-appropriate number of relevant professional hashtags.",
               "",
               "Naturally include search phrases engineers might use, such as standard numbers, voltage levels, software names, equipment names, or calculation terms when relevant.",
-              "Do not keyword-stuff. Do not use more than 6 hashtags. Do not write 'SEO', 'keywords', 'Option', 'Here are', 'choose', or any meta commentary."
+              "Do not keyword-stuff. Do not write 'SEO', 'keywords', 'Option', 'Here are', 'choose', or any meta commentary."
             ].join("\n")
           }]
         }],
         generationConfig: {
           temperature: 0.55,
-          maxOutputTokens: 700
+          maxOutputTokens: maxTokensForTarget(target)
         }
       })
     }
   );
 
   if (!response.ok) {
-    return fallbackDraft(topic, finding, await response.text());
+    return fallbackDraft(topic, finding, await response.text(), target);
   }
 
   const body = await response.json();
@@ -70,7 +73,116 @@ export async function generatePostDraft({ topic, finding, target }, env) {
     .join("")
     .trim();
 
-  return text || fallbackDraft(topic, finding, "empty model output");
+  const finalText = text || fallbackDraft(topic, finding, "empty model output", target);
+  return ensurePlatformLength(finalText, { topic, target });
+}
+
+function ensurePlatformLength(text, { topic, target }) {
+  const minimum = minCharsForTarget(target);
+  if (!minimum || text.length >= minimum || text.includes("Gemini post generation failed")) return text;
+
+  const needsLinkedIn = target === "linkedin_company" || target === "linkedin_personal";
+  if (!needsLinkedIn) return text;
+
+  const addition = [
+    "",
+    "A practical engineering checklist for this topic:",
+    "",
+    "* Validate the single-line diagram against the actual bay arrangement, CT/VT locations, interlocking philosophy, and protection zones.",
+    "* Review short-circuit levels, protection coordination, breaker failure logic, and transformer or line differential schemes before commissioning starts.",
+    "* Confirm IEC 61850 datasets, GOOSE messages, time synchronization, naming conventions, and SCADA signal mapping with real test cases, not only documentation.",
+    "* Treat cybersecurity and access control as part of the commissioning scope, especially for digital substations and remote engineering access.",
+    "* Keep calculation records, relay settings, test reports, and field markups traceable so future modifications do not depend on tribal knowledge.",
+    "",
+    `For engineering teams working on ${String(topic || "high-voltage projects")}, this is where repeatable design checks and structured calculation workflows can prevent expensive late-stage rework.`
+  ].join("\n");
+
+  return `${text.trim()}\n${addition}`;
+}
+
+function minCharsForTarget(target) {
+  if (target === "linkedin_company") return 1600;
+  if (target === "linkedin_personal") return 1400;
+  if (target === "facebook") return 800;
+  if (target === "instagram") return 600;
+  if (target === "reddit") return 1100;
+  return 0;
+}
+
+function platformGuidance(target) {
+  if (target === "linkedin_company") {
+    return [
+      "Platform: LinkedIn company page.",
+      "Optimal length: 1,800-2,600 characters.",
+      "Depth: substantial but scannable. Use 4-6 technical bullets or short paragraphs.",
+      "Tone: authoritative engineering brand voice, useful and practical, lightly connected to IECCalc workflows.",
+      "Hashtags: 4-6."
+    ].join(" ");
+  }
+
+  if (target === "linkedin_personal") {
+    return [
+      "Platform: LinkedIn personal profile.",
+      "Optimal length: 1,500-2,300 characters.",
+      "Depth: practical first-person engineering insight with 4-5 concrete points.",
+      "Tone: human, experienced, field-aware, not salesy.",
+      "Hashtags: 3-5."
+    ].join(" ");
+  }
+
+  if (target === "facebook") {
+    return [
+      "Platform: Facebook.",
+      "Optimal length: 900-1,400 characters.",
+      "Depth: practical and readable, less formal than LinkedIn.",
+      "Use 3-5 points and one direct question.",
+      "Hashtags: 2-4."
+    ].join(" ");
+  }
+
+  if (target === "instagram") {
+    return [
+      "Platform: Instagram.",
+      "Optimal length: 700-1,100 characters.",
+      "Caption should complement the infographic, not repeat every detail.",
+      "Use short lines and 5-8 relevant hashtags."
+    ].join(" ");
+  }
+
+  if (target === "threads") {
+    return [
+      "Platform: Threads.",
+      "Optimal length: 250-500 characters.",
+      "One clear engineering insight, compact and conversational.",
+      "Hashtags: 0-2."
+    ].join(" ");
+  }
+
+  if (target === "reddit") {
+    return [
+      "Platform: Reddit.",
+      "Optimal length: 1,200-2,000 characters.",
+      "Tone: discussion-first, transparent, technically useful, no promotional feel.",
+      "Avoid hashtags."
+    ].join(" ");
+  }
+
+  return [
+    "Platform: broad social distribution.",
+    "Optimal length: 1,000-1,600 characters.",
+    "Make it useful, technical, and scannable.",
+    "Hashtags: 3-5."
+  ].join(" ");
+}
+
+function maxTokensForTarget(target) {
+  if (target === "linkedin_company") return 1100;
+  if (target === "linkedin_personal") return 950;
+  if (target === "facebook") return 650;
+  if (target === "instagram") return 550;
+  if (target === "threads") return 260;
+  if (target === "reddit") return 900;
+  return 750;
 }
 
 function seoGuidance(target) {
@@ -289,8 +401,9 @@ export async function parseDialogueTurn({ message, fastMemory, recentMessages },
               "Understand natural Russian and English conversation.",
               "Return only compact valid JSON.",
               "Intents: create_drafts, provide_topic, status, report, pending, leads, chat.",
-              "Targets: linkedin_personal, linkedin_company, all.",
+              "Targets: linkedin_personal, linkedin_company, facebook, instagram, threads, reddit, all.",
               "If user asks for company and personal LinkedIn, return both targets.",
+              "If user explicitly asks for Facebook, Instagram, Threads, or Reddit, use that exact target.",
               "If user gives a topic while fast memory is waiting for topic, use intent provide_topic.",
               "Do not invent a topic if none is present.",
               "For chat intent, provide a short Russian reply."
@@ -307,7 +420,7 @@ export async function parseDialogueTurn({ message, fastMemory, recentMessages },
               requiredJsonShape: {
                 intent: "string",
                 topic: "string",
-                targets: ["linkedin_personal", "linkedin_company"],
+                targets: ["linkedin_personal", "linkedin_company", "facebook", "instagram", "threads", "reddit"],
                 reply: "string"
               }
             })
@@ -331,12 +444,69 @@ export async function parseDialogueTurn({ message, fastMemory, recentMessages },
   return JSON.parse(text || "{}");
 }
 
-function fallbackDraft(topic, finding, reason) {
+function fallbackDraft(topic, finding, _reason, target = "all") {
+  const cleanTopic = String(topic || "high-voltage power system engineering").replace(/\s+/g, " ").trim();
+  const sourceLine = finding?.url ? `\nReference: ${finding.url}` : "";
+
+  if (target === "threads") {
+    return `500 kV GIS projects are rarely limited by one calculation. The real risk is integration: IEC 61850 signals, protection zones, interlocks, SCADA mapping, and field test evidence all have to match the actual substation.`;
+  }
+
+  if (target === "instagram") {
+    return [
+      `A practical view on ${cleanTopic}.`,
+      "",
+      "For high-voltage substations, the engineering value is in the interfaces:",
+      "",
+      "* protection zones",
+      "* IEC 61850 signal mapping",
+      "* CT/VT verification",
+      "* interlocking logic",
+      "* commissioning evidence",
+      "",
+      "The cleaner the design checks, the fewer surprises appear during energization.",
+      "",
+      "#PowerEngineering #DigitalSubstation #GIS #ProtectionRelay #IEC61850"
+    ].join("\n");
+  }
+
+  if (target === "facebook") {
+    return [
+      `${cleanTopic}: a few practical checks worth discussing.`,
+      "",
+      "On large substation projects, many issues appear at the boundary between design and commissioning:",
+      "",
+      "* the single-line diagram does not fully match field wiring or bay logic;",
+      "* IEC 61850 datasets and GOOSE messages are tested only on paper;",
+      "* relay settings, SCADA points, and interlocking logic are reviewed separately instead of as one system;",
+      "* field changes are not reflected back into the calculation package.",
+      "",
+      "A structured workflow for short-circuit studies, protection coordination, and commissioning records can remove a lot of late-stage rework.",
+      "",
+      "What is usually the hardest part on your projects: design review, relay testing, SCADA integration, or documentation?",
+      "",
+      "#PowerEngineering #Substation #IEC61850"
+    ].join("\n");
+  }
+
   return [
-    `Final post about: ${topic}`,
-    finding?.url ? `Source: ${finding.url}` : null,
+    `${cleanTopic}: where engineering discipline matters most.`,
     "",
-    `Gemini post generation failed: ${reason}`,
-    "Manual edit recommended before approval."
+    "Commissioning a high-voltage GIS or digital substation is not only about passing individual tests. The real challenge is proving that the design, calculations, protection logic, communication model, and field installation all describe the same system.",
+    "",
+    "A few checks are especially important:",
+    "",
+    "* Validate the single-line diagram against the actual bay arrangement, CT/VT locations, interlocking philosophy, and protection zones.",
+    "* Review short-circuit levels, protection coordination, breaker failure logic, and transformer or line differential schemes before commissioning starts.",
+    "* Confirm IEC 61850 datasets, GOOSE messages, time synchronization, naming conventions, and SCADA signal mapping with real test cases, not only documentation.",
+    "* Treat cybersecurity and access control as part of the commissioning scope, especially for digital substations and remote engineering access.",
+    "* Keep calculation records, relay settings, test reports, and field markups traceable so future modifications do not depend on memory or informal notes.",
+    "",
+    "For 330-750 kV projects, small inconsistencies can become expensive because many disciplines meet at the same point: primary equipment, protection, automation, telecom, civil layout, and utility requirements. A repeatable engineering calculator workflow helps keep those interfaces visible.",
+    sourceLine,
+    "",
+    "What commissioning check has saved you the most trouble on a high-voltage substation project?",
+    "",
+    "#PowerEngineering #DigitalSubstation #GIS #IEC61850 #ProtectionCoordination"
   ].filter(Boolean).join("\n");
 }

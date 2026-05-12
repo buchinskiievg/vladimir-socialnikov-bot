@@ -5,7 +5,6 @@ export async function createDraftFromTopic(topic, context) {
   const id = crypto.randomUUID().slice(0, 8);
   const target = context.target || "all";
   const text = await generateDraftText(topic, context.env, null, target);
-  const image = await generateDraftImage({ id, topic, text, target }, context.env);
   const draft = {
     id,
     topic,
@@ -13,12 +12,16 @@ export async function createDraftFromTopic(topic, context) {
     status: "pending",
     target,
     source: "telegram",
-    createdAt: new Date().toISOString(),
-    ...image
+    createdAt: new Date().toISOString()
   };
 
   await insertDraft(context.env, draft);
-  return draft;
+  const image = await generateDraftImage({ id, topic, text, target }, context.env);
+  if (image.imageUrl) {
+    await updateDraftImage(context.env, id, image);
+    return { ...draft, ...image };
+  }
+  return { ...draft, ...image };
 }
 
 export async function listPendingDrafts(env) {
@@ -91,7 +94,6 @@ export async function createDraftFromFinding(finding, env) {
   const id = crypto.randomUUID().slice(0, 8);
   const target = finding.target || "all";
   const text = await generateDraftText(topic, env, finding, target);
-  const image = await generateDraftImage({ id, topic, text, target }, env);
   const draft = {
     id,
     topic,
@@ -99,12 +101,16 @@ export async function createDraftFromFinding(finding, env) {
     status: "pending",
     target,
     source: finding.url || "monitoring",
-    createdAt: new Date().toISOString(),
-    ...image
+    createdAt: new Date().toISOString()
   };
 
   await insertDraft(env, draft);
-  return draft;
+  const image = await generateDraftImage({ id, topic, text, target }, env);
+  if (image.imageUrl) {
+    await updateDraftImage(env, id, image);
+    return { ...draft, ...image };
+  }
+  return { ...draft, ...image };
 }
 
 async function generateDraftImage({ id, topic, text, target }, env) {

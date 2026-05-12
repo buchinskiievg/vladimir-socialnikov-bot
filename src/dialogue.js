@@ -54,7 +54,7 @@ export async function handleDialogue(message, context) {
   const effectiveMemory = newDraftRequest
     ? { ...fastMemory, pendingIntent: "", pendingTargets: [], pendingTopicHint: "" }
     : fastMemory;
-  const turn = await parseDialogueTurn({ message: text, fastMemory: effectiveMemory, recentMessages }, env);
+  const turn = await parseTurnWithFallback({ message: text, fastMemory: effectiveMemory, recentMessages }, env);
   const response = await executeDialogueTurn(turn, { ...context, message, fastMemory: effectiveMemory });
 
   const assistantMessage = { chatId, userId: "bot", role: "assistant", text: responseToMemoryText(response), createdAt: new Date().toISOString() };
@@ -62,6 +62,43 @@ export async function handleDialogue(message, context) {
   await archiveMessageToSlowMemory(env, assistantMessage);
 
   return response;
+}
+
+async function parseTurnWithFallback(input, env) {
+  try {
+    return await parseDialogueTurn(input, env);
+  } catch (error) {
+    console.log(JSON.stringify({ ok: false, job: "dialogue-fallback", error: error.message }));
+    return fallbackDialogueTurn(input.message, input.fastMemory);
+  }
+}
+
+function fallbackDialogueTurn(message, fastMemory) {
+  const text = String(message || "");
+  const lower = text.toLowerCase();
+  if (lower.includes("статус") || lower.includes("status")) return { intent: "status" };
+  if (lower.includes("отчет") || lower.includes("отчёт") || lower.includes("report")) return { intent: "report" };
+  if (lower.includes("лид") || lower.includes("lead")) return { intent: "leads" };
+  if (fastMemory?.pendingIntent === "create_drafts") {
+    return { intent: "provide_topic", topic: text, targets: fastMemory.pendingTargets || ["all"] };
+  }
+  if (startsNewDraftRequest(text) || lower.includes("linkedin") || lower.includes("facebook") || lower.includes("instagram") || lower.includes("threads") || lower.includes("reddit")) {
+    return {
+      intent: "create_drafts",
+      topic: extractExplicitTopic(text) || cleanupFallbackTopic(text),
+      targets: inferTargets(text)
+    };
+  }
+  return { intent: "chat", reply: "Я на связи. Можешь попросить подготовить пост, показать отчет, лиды или посты на проверку." };
+}
+
+function cleanupFallbackTopic(text) {
+  return String(text || "")
+    .replace(/^.*?(?:про|about)\s+/i, "")
+    .replace(/\b(?:пока|ничего|не|публикуй|опубликовывай).*$/i, "")
+    .replace(/\bwith a .*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 async function executeDialogueTurn(turn, context) {
@@ -109,7 +146,7 @@ async function executeDialogueTurn(turn, context) {
   if (turn.intent === "pending") return "/pending";
   if (turn.intent === "leads") return "/leads";
 
-  return turn.reply || "Я на связи. Можешь попросить подготовить публикацию, показать отчёт, лиды или посты на проверку.";
+  return turn.reply || "Я на связи. Можешь попросить подготовить публикацию, показать отчет, лиды или посты на проверку.";
 }
 
 async function clearPending(env, fastMemory, chatId) {
@@ -239,7 +276,7 @@ function readSummary(fastMemory) {
 }
 
 function normalizeTargets(targets) {
-  const valid = new Set(["linkedin_personal", "linkedin_company", "all"]);
+  const valid = new Set(["linkedin_personal", "linkedin_company", "facebook", "instagram", "threads", "reddit", "all"]);
   const normalized = [...new Set((targets || []).filter((target) => valid.has(target)))];
   if (normalized.includes("all")) return ["all"];
   return normalized.length ? normalized : ["all"];
@@ -247,6 +284,11 @@ function normalizeTargets(targets) {
 
 function overrideTargetsFromText(text, targets) {
   const lower = String(text || "").toLowerCase();
+  const explicit = [];
+  if (lower.includes("facebook") || lower.includes("фейсбук")) explicit.push("facebook");
+  if (lower.includes("instagram") || lower.includes("инстаграм")) explicit.push("instagram");
+  if (lower.includes("threads")) explicit.push("threads");
+  if (lower.includes("reddit")) explicit.push("reddit");
   const mentionsLinkedIn = lower.includes("linkedin") || lower.includes("линкедин") || lower.includes("linked in");
   const companyOnly = mentionsLinkedIn
     && (lower.includes("компани") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company"))
@@ -257,6 +299,7 @@ function overrideTargetsFromText(text, targets) {
 
   if (companyOnly) return ["linkedin_company"];
   if (personalOnly) return ["linkedin_personal"];
+  if (explicit.length) return [...new Set(explicit)];
   return targets;
 }
 
@@ -300,7 +343,7 @@ function responseToMemoryText(response) {
 function startsNewDraftRequest(text) {
   const lower = String(text || "").toLowerCase();
   return [
-    "подготовь",
+    "подготов",
     "сделай пост",
     "сделай публикац",
     "напиши пост",
@@ -313,16 +356,20 @@ function startsNewDraftRequest(text) {
 function extractExplicitTopic(text) {
   const match = String(text || "").match(/(?:по теме|на тему|про|about)\s+(.+)$/i);
   const topic = match?.[1]?.trim() || "";
-  return topic.length >= 8 ? topic : "";
+  return topic.length >= 8 ? cleanupFallbackTopic(topic) : "";
 }
 
 function inferTargets(text) {
   const lower = String(text || "").toLowerCase();
   const targets = [];
-  if (lower.includes("личн") || lower.includes("персональн") || lower.includes("personal")) targets.push("linkedin_personal");
-  if (lower.includes("компан") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company") || lower.includes("ieccalc")) targets.push("linkedin_company");
+  if (lower.includes("личн") || lower.includes("персонал") || lower.includes("personal")) targets.push("linkedin_personal");
+  if (lower.includes("компани") || lower.includes("организац") || lower.includes("страниц") || lower.includes("company") || lower.includes("ieccalc")) targets.push("linkedin_company");
+  if (lower.includes("facebook") || lower.includes("фейсбук")) targets.push("facebook");
+  if (lower.includes("instagram") || lower.includes("инстаграм")) targets.push("instagram");
+  if (lower.includes("threads")) targets.push("threads");
+  if (lower.includes("reddit")) targets.push("reddit");
   if (!targets.length && lower.includes("linkedin")) return ["all"];
-  return targets.length ? targets : ["all"];
+  return targets.length ? [...new Set(targets)] : ["all"];
 }
 
 export async function resetDialogue(env, chatId) {

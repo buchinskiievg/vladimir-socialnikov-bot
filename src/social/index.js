@@ -32,5 +32,9 @@ function filterConnectors(connectors, target) {
   if (target === "linkedin_personal" || target === "linkedin_company") {
     return connectors.filter((connector) => connector.name === "LinkedIn");
   }
+  if (target === "facebook") return connectors.filter((connector) => connector.name === "Facebook");
+  if (target === "instagram") return connectors.filter((connector) => connector.name === "Instagram");
+  if (target === "threads") return connectors.filter((connector) => connector.name === "Threads");
+  if (target === "reddit") return connectors.filter((connector) => connector.name === "Reddit");
   return connectors;
 }

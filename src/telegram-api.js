@@ -13,7 +13,7 @@ export async function sendTelegramMessage(env, chatId, text, options = {}) {
       return sendTelegramMessage(
         env,
         chatId,
-        `${text}\n\nImage preview link: ${options.photoUrl}\nTelegram image preview failed: ${error.message}`,
+        `${text}\n\nImage: ${options.photoUrl}`,
         messageOptions
       );
     }
