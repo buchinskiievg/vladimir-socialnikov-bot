@@ -116,7 +116,7 @@ export async function routeCommand(text, context) {
   if (firstLine === "/pending") {
     const drafts = await listPendingDrafts(context.env);
     if (drafts.length === 0) return "No posts waiting for approval.";
-    return drafts.map(formatDraftBrief).join("\n\n");
+    return formatPendingDrafts(drafts);
   }
 
   if (firstLine.startsWith("/approve ")) {
@@ -212,6 +212,19 @@ function formatDraftBrief(draft) {
   ].filter(Boolean).join("\n");
 }
 
+function formatPendingDrafts(drafts) {
+  const cleanDrafts = drafts.filter((draft) => !looksBrokenDraft(draft)).slice(0, 3);
+  if (!cleanDrafts.length) return "No clean posts waiting for approval.";
+  return { messages: cleanDrafts.map(formatDraft) };
+}
+
+function looksBrokenDraft(draft) {
+  const text = String(draft?.text || "");
+  return text.includes("Gemini draft generation failed")
+    || text.includes("Gemini post generation failed")
+    || text.includes("Manual edit recommended before approval.");
+}
+
 function formatLeadBrief(lead) {
   return [
     `Lead ${lead.id} | score ${lead.score}`,
@@ -232,7 +245,7 @@ async function handleNaturalLanguage(message, context) {
     if (dialogueResponse === "/pending") {
       const drafts = await listPendingDrafts(context.env);
       if (drafts.length === 0) return "No posts waiting for approval.";
-      return drafts.map(formatDraftBrief).join("\n\n");
+      return formatPendingDrafts(drafts);
     }
     if (dialogueResponse === "/leads") {
       const leads = await listLeadsByStatus(context.env, "new");
@@ -248,7 +261,7 @@ async function handleNaturalLanguage(message, context) {
   if (intent.intent === "pending") {
     const drafts = await listPendingDrafts(context.env);
     if (drafts.length === 0) return "No posts waiting for approval.";
-    return drafts.map(formatDraftBrief).join("\n\n");
+    return formatPendingDrafts(drafts);
   }
   if (intent.intent === "report") {
     return { text: await buildDailyReport(context.env), options: { parse_mode: undefined } };
