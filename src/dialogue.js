@@ -1,5 +1,5 @@
 import { generateDialogueReply, parseDialogueTurn } from "./ai/gemini.js";
-import { createDraftFromTopic, listPendingDrafts, reviseDraft } from "./workflows/drafts.js";
+import { createDraftFromTopic, listPendingDrafts, regenerateDraftImage, reviseDraft } from "./workflows/drafts.js";
 import {
   appendChatMessage,
   archiveMessageToSlowMemory,
@@ -212,6 +212,18 @@ async function handleDraftRevision(text, context) {
     return "\u041f\u043e\u043d\u044f\u043b \u043f\u0440\u0430\u0432\u043a\u0443, \u043d\u043e \u043d\u0435 \u0432\u0438\u0436\u0443 \u043f\u043e\u0441\u0442\u0430 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443. \u041d\u0430\u043f\u0438\u0448\u0438, \u043d\u0430\u043f\u0440\u0438\u043c\u0435\u0440: \u043f\u0435\u0440\u0435\u043f\u0438\u0448\u0438 \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u043f\u043e\u0441\u0442 \u043a\u043e\u0440\u043e\u0447\u0435.";
   }
 
+  if (looksLikeImageRevision(text) && !looksLikeTextRevision(text)) {
+    const updated = [];
+    for (const id of targetIds) {
+      const result = await regenerateDraftImage(id, text, { env });
+      if (result.ok && result.draft) updated.push(result.draft);
+    }
+
+    if (!updated.length) return "\u041d\u0435 \u0441\u043c\u043e\u0433 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0434\u043b\u044f \u043f\u043e\u0441\u0442\u0430 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443.";
+    await rememberDrafts(env, fastMemory, context.chatId, updated);
+    return formatImageUpdates(updated);
+  }
+
   const updated = [];
   for (const id of targetIds) {
     const result = await reviseDraft(id, text, { env });
@@ -251,12 +263,53 @@ function looksLikeDraftRevision(text) {
     "\u0437\u0430\u043c\u0435\u043d\u0438 \u0442\u0435\u043c\u0443",
     "\u043f\u043e\u043c\u0435\u043d\u044f\u0439 \u0442\u0435\u043c\u0443",
     "\u043f\u0435\u0440\u0435\u0432\u0435\u0434\u0438",
+    "\u043a\u0430\u0440\u0442\u0438\u043d",
+    "\u0438\u0437\u043e\u0431\u0440\u0430\u0436",
+    "\u0438\u043d\u0444\u043e\u0433\u0440\u0430\u0444",
+    "\u0444\u043e\u043d",
+    "\u0446\u0432\u0435\u0442",
+    "\u044f\u0440\u0447\u0435",
+    "\u0433\u043b\u044f\u043d\u0446",
     "translate",
     "rewrite",
     "revise",
     "shorter",
     "more technical",
     "less sales"
+  ]);
+}
+
+function looksLikeImageRevision(text) {
+  const lower = String(text || "").toLowerCase();
+  return hasAny(lower, [
+    "\u043a\u0430\u0440\u0442\u0438\u043d",
+    "\u0438\u0437\u043e\u0431\u0440\u0430\u0436",
+    "\u0438\u043d\u0444\u043e\u0433\u0440\u0430\u0444",
+    "\u0444\u043e\u0442\u043e",
+    "\u0432\u0438\u0437\u0443\u0430\u043b",
+    "\u0444\u043e\u043d",
+    "\u0446\u0432\u0435\u0442",
+    "image",
+    "picture",
+    "visual",
+    "infographic"
+  ]);
+}
+
+function looksLikeTextRevision(text) {
+  const lower = String(text || "").toLowerCase();
+  return hasAny(lower, [
+    "\u0442\u0435\u043a\u0441\u0442",
+    "\u043f\u0435\u0440\u0435\u043f\u0438\u0448\u0438",
+    "\u0434\u043b\u0438\u043d\u043d\u0435\u0435",
+    "\u043a\u043e\u0440\u043e\u0447\u0435",
+    "\u043f\u0435\u0440\u0435\u0432\u0435\u0434\u0438",
+    "text",
+    "caption",
+    "rewrite",
+    "translate",
+    "shorter",
+    "longer"
   ]);
 }
 
@@ -347,6 +400,24 @@ function formatDrafts(drafts) {
   return {
     messages: drafts.map((draft) => ({
       text: `${formatApprovalHeader(draft)}\n\n${draft.text}`,
+      options: {
+        photoUrl: draft.imageUrl || undefined,
+        reply_markup: {
+          inline_keyboard: draftButtons(draft.id)
+        }
+      }
+    }))
+  };
+}
+
+function formatImageUpdates(drafts) {
+  return {
+    messages: drafts.map((draft) => ({
+      text: [
+        `${formatApprovalHeader(draft)}`,
+        "",
+        "\u041e\u0431\u043d\u043e\u0432\u0438\u043b \u0442\u043e\u043b\u044c\u043a\u043e \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443. \u0422\u0435\u043a\u0441\u0442 \u043f\u043e\u0441\u0442\u0430 \u043d\u0435 \u043c\u0435\u043d\u044f\u043b."
+      ].join("\n"),
       options: {
         photoUrl: draft.imageUrl || undefined,
         reply_markup: {

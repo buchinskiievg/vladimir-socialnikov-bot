@@ -1,9 +1,9 @@
-export async function generateInfographicForPost({ id, topic, text, target }, env) {
+export async function generateInfographicForPost({ id, topic, text, target, imageInstruction }, env) {
   if (env.GENERATE_POST_IMAGES === "false") return null;
   if (!env.MESSAGE_ARCHIVE || !env.PUBLIC_WORKER_URL) return null;
 
   const spec = imageSpecForTarget(target);
-  const imagePrompt = buildInfographicPrompt({ topic, text, target, spec });
+  const imagePrompt = buildInfographicPrompt({ topic, text, target, spec, imageInstruction });
   let image = null;
   let prompt = imagePrompt;
 
@@ -76,7 +76,7 @@ async function generateGeminiImage(prompt, env) {
   };
 }
 
-function buildInfographicPrompt({ topic, text, target, spec }) {
+function buildInfographicPrompt({ topic, text, target, spec, imageInstruction }) {
   const concept = visualConceptForTopic(topic, text);
   return [
     "Generate one premium glossy engineering infographic image for a professional social media post. The infographic must fill the entire canvas.",
@@ -92,6 +92,8 @@ function buildInfographicPrompt({ topic, text, target, spec }) {
     "Do not include fake standards numbers, fake company logos, watermarks, signatures, QR codes, or contact details.",
     `Topic: ${topic}`,
     `Target: ${target || "all"}`,
+    imageInstruction ? `User image revision request: ${imageInstruction}` : "",
+    imageInstruction ? "Apply the user image revision request only to the visual style/composition. Do not change the post topic or invent a new subject." : "",
     "",
     "Post text for context:",
     String(text || "").slice(0, 1800)

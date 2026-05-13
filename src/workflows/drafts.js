@@ -43,6 +43,35 @@ export async function reviseDraft(id, instruction, context) {
   };
 }
 
+export async function regenerateDraftImage(id, instruction, context) {
+  const draft = await readDraft(context.env, id);
+  if (!draft) return { ok: false, message: `Post ${id} not found.` };
+  if (draft.status !== "pending") return { ok: false, message: `Post ${id} is ${draft.status}.` };
+
+  const image = await generateDraftImage({
+    id: draft.id,
+    topic: draft.topic,
+    text: draft.text,
+    target: draft.target || "all",
+    imageInstruction: instruction
+  }, context.env);
+
+  if (!image.imageUrl) {
+    return {
+      ok: false,
+      message: `Post ${id}: image regeneration failed. ${image.imagePrompt || ""}`.trim()
+    };
+  }
+
+  await updateDraftImage(context.env, id, image);
+
+  return {
+    ok: true,
+    draft: { ...draft, ...image, status: "pending" },
+    message: `Post ${id}: image updated. Text unchanged.`
+  };
+}
+
 export async function approveDraft(id, context) {
   let draft = await readDraft(context.env, id);
   if (!draft) return { ok: false, message: `Post ${id} not found.` };
@@ -113,10 +142,10 @@ export async function createDraftFromFinding(finding, env) {
   return { ...draft, ...image };
 }
 
-async function generateDraftImage({ id, topic, text, target }, env) {
+async function generateDraftImage({ id, topic, text, target, imageInstruction }, env) {
   try {
     const { generateInfographicForPost } = await import("../ai/images.js");
-    return await generateInfographicForPost({ id, topic, text, target }, env) || {};
+    return await generateInfographicForPost({ id, topic, text, target, imageInstruction }, env) || {};
   } catch (error) {
     return {
       imagePrompt: `Image generation failed: ${error.message}`
