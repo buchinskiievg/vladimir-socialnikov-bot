@@ -1,6 +1,7 @@
 import { publishToSocials } from "./social/index.js";
 import { approveDraft, createDraftFromTopic, listPendingDrafts, rejectDraft } from "./workflows/drafts.js";
 import { addSource, listSources } from "./storage/sources.js";
+import { seedGoogleNewsSources } from "./monitoring/google-news.js";
 import { listLeadsByStatus } from "./storage/leads.js";
 import { buildDailyReport } from "./reports/daily.js";
 import { handleDialogue } from "./dialogue.js";
@@ -27,6 +28,7 @@ export async function routeCommand(text, context) {
       "/reject <id> - reject the post",
       "/reset - clear current dialogue state",
       "/source add <type> <topic> <url> - monitor a source",
+      "/google-news seed - add default Google News search sources",
       "/sources - list monitored sources",
       "/leads - list new leads",
       "/report - daily monitoring report",
@@ -73,9 +75,20 @@ export async function routeCommand(text, context) {
     const args = firstLine.slice("/source add ".length).trim().split(/\s+/);
     const [type, topic, ...urlParts] = args;
     const url = urlParts.join(" ");
-    if (!type || !topic || !url) return "Usage: /source add <rss|forum|news> <topic> <url>";
+    if (!type || !topic || !url) return "Usage: /source add <rss|forum|news|google_news> <topic> <url>";
     const source = await addSource(context.env, { type, topic, url, name: topic });
     return `Source added: ${source.id}\n${source.type} ${source.topic}\n${source.url}`;
+  }
+
+  if (firstLine === "/google-news seed") {
+    const result = await seedGoogleNewsSources(context.env);
+    return [
+      "Google News sources ready.",
+      `Created now: ${result.created.length}`,
+      `Total Google News sources: ${result.totalGoogleNewsSources}`,
+      "",
+      "Mode: Google News RSS search, freshness filter: 14 days."
+    ].join("\n");
   }
 
   if (firstLine === "/sources") {

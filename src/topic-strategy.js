@@ -72,6 +72,7 @@ export const PLATFORM_SOURCE_MAP = {
   forum: "forums",
   news: "linkedin",
   rss: "linkedin",
+  google_news: "linkedin",
   facebook_group: "facebook",
   facebook_search: "facebook",
   classifieds: "facebook"

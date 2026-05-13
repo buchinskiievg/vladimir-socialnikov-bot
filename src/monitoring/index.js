@@ -2,6 +2,7 @@ import { insertLead } from "../storage/leads.js";
 import { listSources, updateSourceCheckedAt } from "../storage/sources.js";
 import { fetchRssItems } from "./rss.js";
 import { fetchHtmlItems } from "./html-list.js";
+import { fetchGoogleNewsItems } from "./google-news.js";
 import { enrichItem } from "./thread-scanner.js";
 import { insertScanRun } from "../storage/scan-runs.js";
 import { createDraftsFromDemand } from "../workflows/demand.js";
@@ -148,6 +149,10 @@ function filterSources(sources, event = {}) {
 async function fetchSourceItems(source, env) {
   if (source.type === "rss" || source.type === "reddit") {
     return await fetchRssItems(source);
+  }
+
+  if (source.type === "google_news") {
+    return await fetchGoogleNewsItems(source, env);
   }
 
   if (source.type === "news") {
