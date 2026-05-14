@@ -25,6 +25,8 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               "Return exactly one ready-to-publish post.",
               "Do not provide options, alternatives, explanations, or markdown headings.",
               "Avoid hype. Do not copy source text. Mention standards only when relevant.",
+              "When an external source is provided, ground the post in that source only. Do not invent project details, equipment specifications, companies, dates, locations, or claims that are not present in the source context.",
+              "If the source context is thin, write a cautious engineering takeaway from the provided material instead of pretending to know more.",
               "Use the target platform's optimal length and depth. Do not make LinkedIn posts too short.",
               "The opening must be a strong human hook, not a news-title restatement.",
               "Never start with phrases like 'The recent...', 'The development of...', 'The construction of...', 'X represents...', or '<topic>:'."
@@ -44,6 +46,7 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               source,
               "",
               "Prepare exactly one final platform-optimized post for human approval.",
+              finding?.url ? "Grounding rule: every concrete factual claim must be supported by the title, excerpt, source text, or URL context above. You may add general engineering interpretation, but clearly keep it as interpretation/checklist, not as source facts." : "",
               "Language: English only. Translate the user's topic into natural professional English before writing.",
               "Use the requested platform length and structure.",
               "Start with a standalone engineering insight, tension, or practical problem. Do not repeat the title as the first sentence.",

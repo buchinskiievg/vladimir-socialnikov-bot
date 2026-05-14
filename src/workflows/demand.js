@@ -6,6 +6,7 @@ export async function createDraftsFromDemand(findings, env) {
   if (!findings.length || maxDrafts <= 0) return { topics: [], drafts: [] };
 
   const topics = await findDemandTopics(findings, env);
+  const findingsByUrl = new Map(findings.map((finding) => [finding.url, finding]).filter(([url]) => url));
   const drafts = [];
 
   const selectedTopics = [];
@@ -13,20 +14,49 @@ export async function createDraftsFromDemand(findings, env) {
     if (drafts.length >= maxDrafts) break;
     const target = normalizeTarget(item.target);
     const topic = cleanTopic(item.topic);
+    const sourceFinding = findSourceFinding(item, findingsByUrl, findings);
+    if (!sourceFinding?.url) continue;
     if (await hasPublishedPost(env, { topic, target })) continue;
     selectedTopics.push(item);
     drafts.push(await createDraftFromTopic(topic, {
       env,
       target,
       finding: {
-        title: topic,
-        excerpt: [item.angle, item.demandReason].filter(Boolean).join("\n"),
-        url: item.evidenceUrls?.[0] || ""
+        title: sourceFinding.title || topic,
+        excerpt: buildGroundedExcerpt(sourceFinding, item),
+        url: sourceFinding.url
       }
     }));
   }
 
   return { topics: selectedTopics, drafts };
+}
+
+function findSourceFinding(topicItem, findingsByUrl, findings) {
+  for (const url of topicItem.evidenceUrls || []) {
+    const finding = findingsByUrl.get(url);
+    if (finding) return finding;
+  }
+
+  const topic = cleanTopic(topicItem.topic).toLowerCase();
+  return findings.find((finding) => {
+    const haystack = [
+      finding.title,
+      finding.excerpt,
+      finding.fullText,
+      finding.url
+    ].filter(Boolean).join(" ").toLowerCase();
+    return topic && haystack.includes(topic.slice(0, Math.min(topic.length, 80)));
+  }) || null;
+}
+
+function buildGroundedExcerpt(finding, topicItem) {
+  return [
+    String(finding.excerpt || finding.fullText || "").slice(0, 1200),
+    "",
+    `Why selected: ${[topicItem.angle, topicItem.demandReason].filter(Boolean).join(" ")}`,
+    finding.scoring?.components ? `Score components: ${JSON.stringify(finding.scoring.components)}` : ""
+  ].filter(Boolean).join("\n").trim();
 }
 
 async function findDemandTopics(findings, env) {
