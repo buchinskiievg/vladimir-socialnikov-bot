@@ -1,7 +1,7 @@
 import { routeCommand } from "./commands.js";
 import { approveDraft, rejectDraft } from "./workflows/drafts.js";
 import { approveSourceCandidate, rejectSourceCandidate } from "./storage/source-candidates.js";
-import { sendTelegramAction, sendTelegramMessage, sendTelegramReaction } from "./telegram-api.js";
+import { sendTelegramAction, sendTelegramMessage, sendTelegramReaction, sendTelegramTextOnly } from "./telegram-api.js";
 
 export async function handleTelegramWebhook(request, env, ctx) {
   if (!isValidWebhookSecret(request, env)) {
@@ -34,8 +34,7 @@ async function handleTelegramMessageAsync(message, context) {
   try {
     const text = message.text || "";
     if (shouldAcknowledgeWithReaction(text)) {
-      await sendTelegramReaction(context.env, message.chat.id, message.message_id);
-      await sendTelegramAction(context.env, message.chat.id, "typing");
+      await acknowledgeIncomingMessage(message, context);
     }
 
     const reply = await routeCommand(text, { ...context, message });
@@ -50,6 +49,35 @@ async function handleTelegramMessageAsync(message, context) {
       `Не смог обработать сообщение.\nОшибка: ${error.message}`
     );
   }
+}
+
+async function acknowledgeIncomingMessage(message, context) {
+  try {
+    await sendTelegramReaction(context.env, message.chat.id, message.message_id);
+    await sendTelegramAction(context.env, message.chat.id, "typing");
+    if (looksLongRunning(message.text || "")) {
+      await sendTelegramTextOnly(context.env, message.chat.id, "Принял, готовлю. Если понадобится уточнение, спрошу.");
+    }
+  } catch (error) {
+    console.log(JSON.stringify({ ok: false, job: "telegram-acknowledge", chatId: message.chat.id, error: error.message }));
+  }
+}
+
+function looksLongRunning(text) {
+  const lower = String(text || "").toLowerCase();
+  return [
+    "пост",
+    "публикац",
+    "linkedin",
+    "линкедин",
+    "картин",
+    "изображ",
+    "инфограф",
+    "найди",
+    "подбери",
+    "составь",
+    "сделай"
+  ].some((marker) => lower.includes(marker));
 }
 
 async function handleCallbackQuery(callbackQuery, env, ctx) {

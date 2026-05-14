@@ -23,6 +23,10 @@ export async function sendTelegramMessage(env, chatId, text, options = {}) {
   return sendTelegramText(env, chatId, text, options);
 }
 
+export async function sendTelegramTextOnly(env, chatId, text, options = {}) {
+  return sendTelegramText(env, chatId, text, options);
+}
+
 export async function sendTelegramAction(env, chatId, action = "typing") {
   const token = env.TELEGRAM_BOT_TOKEN;
   if (!token) throw new Error("Missing TELEGRAM_BOT_TOKEN");
@@ -65,12 +69,13 @@ export async function sendTelegramReaction(env, chatId, messageId, emoji = "\u{1
 
 async function sendTelegramText(env, chatId, text, options = {}) {
   const token = env.TELEGRAM_BOT_TOKEN;
+  const messageText = String(text || "").slice(0, 3900);
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       chat_id: chatId,
-      text,
+      text: messageText,
       disable_web_page_preview: true,
       ...options
     })
