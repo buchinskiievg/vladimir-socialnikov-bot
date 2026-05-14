@@ -467,6 +467,7 @@ export async function parseDialogueTurn({ message, fastMemory, recentMessages },
               "If user explicitly asks for Facebook, Instagram, Threads, or Reddit, use that exact target.",
               "If user gives a topic while fast memory is waiting for topic, use intent provide_topic.",
               "Do not invent a topic if none is present.",
+              "If essential details are missing, still classify the intent correctly and leave missing fields empty; the assistant is allowed to ask a natural follow-up question.",
               "For create_drafts and change_topic, extract the real subject/topic, not the whole user sentence.",
               "For revise_text and revise_image, topic can be empty unless the user explicitly provides a replacement topic.",
               "For chat intent, provide a short Russian reply.",
@@ -510,6 +511,58 @@ export async function parseDialogueTurn({ message, fastMemory, recentMessages },
   const body = await response.json();
   const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
   return JSON.parse(text || "{}");
+}
+
+export async function generateClarifyingQuestion({ message, missing, fastMemory, recentMessages }, env) {
+  const model = env.GEMINI_TEXT_MODEL || "gemini-2.5-flash-lite";
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{
+            text: [
+              "You are Vladimir Socialnikov, Evgenii's Telegram assistant.",
+              "Ask one short, natural clarifying question in Russian.",
+              "Do not mention JSON, commands, parsers, intents, or internal tools.",
+              "Do not apologize. Do not provide a menu unless it is genuinely helpful.",
+              "Use the user's wording and context. Be specific about what detail is missing.",
+              "If the missing detail is a post topic, ask what the post should be about.",
+              "If the missing detail is a replacement topic, ask what new topic to use.",
+              "If target/social network is unclear, ask where to prepare it, but only if the topic is already clear."
+            ].join(" ")
+          }]
+        },
+        contents: [{
+          role: "user",
+          parts: [{
+            text: JSON.stringify({
+              userMessage: message,
+              missing,
+              fastMemory,
+              recentMessages
+            })
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.35,
+          maxOutputTokens: 180
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Gemini clarifying question failed: ${response.status} ${await response.text()}`);
+  }
+
+  const body = await response.json();
+  return body.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text || "")
+    .join("")
+    .trim() || "Уточни, пожалуйста, какой детали не хватает для задачи?";
 }
 
 export async function generateDialogueReply({ message, fastMemory, recentMessages }, env) {

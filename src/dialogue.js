@@ -1,4 +1,4 @@
-import { generateDialogueReply, parseDialogueTurn } from "./ai/gemini.js";
+import { generateClarifyingQuestion, generateDialogueReply, parseDialogueTurn } from "./ai/gemini.js";
 import { createDraftFromTopic, listPendingDrafts, regenerateDraftImage, reviseDraft } from "./workflows/drafts.js";
 import {
   appendChatMessage,
@@ -89,7 +89,7 @@ async function executeDialogueTurn(turn, context) {
         pendingTargets: targets,
         pendingTopicHint: ""
       });
-      return REPLY_ASK_TOPIC;
+      return await buildClarifyingReply(context, "missing post topic");
     }
 
     const drafts = [];
@@ -121,7 +121,7 @@ async function executeDialogueTurn(turn, context) {
 
   if (turn.intent === "change_topic") {
     const topic = cleanupFallbackTopic(turn.topic || "");
-    if (!topic) return REPLY_ASK_TOPIC;
+    if (!topic) return await buildClarifyingReply(context, "missing replacement topic");
     const summary = readSummary(fastMemory);
     const targets = overrideTargetsFromText(context.message.text, normalizeTargets(turn.targets?.length ? turn.targets : summary.recentDraftTargets || ["all"]));
     const drafts = [];
@@ -157,6 +157,22 @@ async function buildBrainReply(context, parsedReply) {
     }
   }
   return parsedReply || REPLY_GEMINI_DOWN || REPLY_GENERIC;
+}
+
+async function buildClarifyingReply(context, missing) {
+  if (context.env.GEMINI_API_KEY) {
+    try {
+      return await generateClarifyingQuestion({
+        message: context.message.text || "",
+        missing,
+        fastMemory: context.fastMemory,
+        recentMessages: context.recentMessages || []
+      }, context.env);
+    } catch (error) {
+      console.log(JSON.stringify({ ok: false, job: "dialogue-clarify", error: error.message }));
+    }
+  }
+  return REPLY_ASK_TOPIC;
 }
 
 async function rememberDrafts(env, fastMemory, chatId, drafts) {
