@@ -111,6 +111,10 @@ async function executeDialogueTurn(turn, context) {
     return formatDrafts(drafts);
   }
 
+  if (turn.intent === "auto_select_topic") {
+    return await handleAutoSelectedTopic(context);
+  }
+
   if (turn.intent === "revise_image") {
     return await handleImageRevision(context.message.text || "", { ...context, fastMemory, chatId });
   }
@@ -257,6 +261,32 @@ async function handleImageRevision(text, context) {
   if (!updated.length) return "\u041d\u0435 \u0441\u043c\u043e\u0433 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0434\u043b\u044f \u043f\u043e\u0441\u0442\u0430 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443.";
   await rememberDrafts(env, fastMemory, context.chatId, updated);
   return formatImageUpdates(updated);
+}
+
+async function handleAutoSelectedTopic(context) {
+  const env = context.env;
+  const fastMemory = context.fastMemory;
+  const pending = await listPendingDrafts(env);
+  const candidate = pending.find((draft) => draft.source && draft.source !== "telegram") || pending[0];
+  if (!candidate?.topic) {
+    return "\u041f\u043e\u043a\u0430 \u043d\u0435 \u0432\u0438\u0436\u0443 \u0441\u0438\u043b\u044c\u043d\u044b\u0445 \u0442\u0435\u043c \u0438\u0437 \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433\u0430. \u041c\u043e\u0433\u0443 \u0441\u0434\u0435\u043b\u0430\u0442\u044c \u043f\u043e\u0441\u0442 \u043d\u0430 \u0442\u0432\u043e\u044e \u0442\u0435\u043c\u0443.";
+  }
+
+  const targets = normalizeTargets(fastMemory.pendingTargets?.length ? fastMemory.pendingTargets : [candidate.target || "all"]);
+  const drafts = [];
+  for (const target of targets) {
+    drafts.push(await createDraftFromTopic(candidate.topic, {
+      ...context,
+      target,
+      finding: {
+        title: candidate.topic,
+        excerpt: candidate.text,
+        url: candidate.source && candidate.source !== "telegram" ? candidate.source : ""
+      }
+    }));
+  }
+  await rememberDrafts(env, fastMemory, context.message.chat.id, drafts);
+  return formatDrafts(drafts);
 }
 
 async function handleTextRevision(text, context) {
