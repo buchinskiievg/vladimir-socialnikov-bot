@@ -1,6 +1,6 @@
 import { generateClarifyingQuestion, generateDialogueReply, parseDialogueTurn } from "./ai/gemini.js";
 import { createDraftFromTopic, listPendingDrafts, regenerateDraftImage, reviseDraft } from "./workflows/drafts.js";
-import { discoverRedditCommunities, formatRedditDiscovery } from "./workflows/reddit-discovery.js";
+import { buildRedditDiscoveryMessages, discoverRedditCommunities } from "./workflows/reddit-discovery.js";
 import {
   appendChatMessage,
   archiveMessageToSlowMemory,
@@ -143,8 +143,9 @@ async function executeDialogueTurn(turn, context) {
   if (turn.intent === "pending") return "/pending";
   if (turn.intent === "leads") return "/leads";
   if (turn.intent === "find_reddit_communities") {
-    const result = await discoverRedditCommunities(env, { topic: turn.topic || context.message.text || "" });
-    return formatRedditDiscovery(result);
+    const topic = turn.topic || context.message.text || "";
+    const result = await discoverRedditCommunities(env, { topic });
+    return await buildRedditDiscoveryMessages(env, result, { topic });
   }
 
   if (turn.intent === "chat") {

@@ -6,7 +6,7 @@ import { listLeadsByStatus } from "./storage/leads.js";
 import { buildDailyReport } from "./reports/daily.js";
 import { handleDialogue } from "./dialogue.js";
 import { resetDialogue } from "./dialogue.js";
-import { discoverRedditCommunities, formatRedditDiscovery } from "./workflows/reddit-discovery.js";
+import { buildRedditDiscoveryMessages, discoverRedditCommunities } from "./workflows/reddit-discovery.js";
 import {
   listTopicPreferences,
   seedDefaultTopicPreferences,
@@ -125,7 +125,8 @@ export async function routeCommand(text, context) {
 
   if (firstLine === "/reddit-discover" || firstLine.startsWith("/reddit-discover ")) {
     const topic = firstLine.slice("/reddit-discover".length).trim();
-    return formatRedditDiscovery(await discoverRedditCommunities(context.env, { topic }));
+    const result = await discoverRedditCommunities(context.env, { topic });
+    return await buildRedditDiscoveryMessages(context.env, result, { topic });
   }
 
   if (firstLine === "/test-publish") {

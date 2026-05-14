@@ -1,4 +1,5 @@
 import { executeComposioTool } from "../social/composio.js";
+import { addSourceCandidate } from "../storage/source-candidates.js";
 
 const DEFAULT_QUERIES = [
   "electrical engineering",
@@ -118,6 +119,50 @@ export function formatRedditDiscovery(result) {
   return lines.join("\n").slice(0, 3900);
 }
 
+export async function buildRedditDiscoveryMessages(env, result, { topic = "" } = {}) {
+  if (!result.ok) return result.message;
+  if (!result.communities.length) return formatRedditDiscovery(result);
+
+  const messages = [];
+  messages.push({
+    text: [
+      "Нашел Reddit-сообщества на проверку.",
+      "Если тематика наша, нажми Approve - я добавлю источник в базу мониторинга."
+    ].join("\n")
+  });
+
+  for (const community of result.communities.slice(0, 8)) {
+    const candidate = await addSourceCandidate(env, {
+      type: "reddit",
+      name: community.prefixedName,
+      url: redditRssUrl(community.displayName),
+      topic: topic || "power engineering",
+      score: community.score,
+      reason: community.reason
+    });
+
+    messages.push({
+      text: [
+        `${community.prefixedName} - score ${community.score}`,
+        `Subscribers: ${formatNumber(community.subscribers)}; active now: ${formatNumber(community.activeUsers)}`,
+        `Use: ${community.recommendedUse}`,
+        `Why: ${community.reason}`,
+        `Link: ${redditPublicUrl(community.displayName)}`
+      ].join("\n"),
+      options: {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "Approve source", callback_data: `source_approve:${candidate.id}` },
+            { text: "Reject", callback_data: `source_reject:${candidate.id}` }
+          ]]
+        }
+      }
+    });
+  }
+
+  return { messages };
+}
+
 function buildQueries(topic) {
   const cleanTopic = cleanupTopic(topic);
   const queries = cleanTopic ? [cleanTopic, ...DEFAULT_QUERIES] : DEFAULT_QUERIES;
@@ -228,4 +273,12 @@ function buildReason(community, relevance) {
 function formatNumber(value) {
   if (!Number.isFinite(value) || value <= 0) return "unknown";
   return Math.round(value).toLocaleString("en-US");
+}
+
+function redditPublicUrl(displayName) {
+  return `https://www.reddit.com/r/${encodeURIComponent(displayName)}/`;
+}
+
+function redditRssUrl(displayName) {
+  return `https://www.reddit.com/r/${encodeURIComponent(displayName)}/.rss`;
 }

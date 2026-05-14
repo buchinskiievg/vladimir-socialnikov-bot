@@ -1,5 +1,6 @@
 import { routeCommand } from "./commands.js";
 import { approveDraft, rejectDraft } from "./workflows/drafts.js";
+import { approveSourceCandidate, rejectSourceCandidate } from "./storage/source-candidates.js";
 import { sendTelegramAction, sendTelegramMessage, sendTelegramReaction } from "./telegram-api.js";
 
 export async function handleTelegramWebhook(request, env, ctx) {
@@ -69,7 +70,11 @@ async function handleCallbackQuery(callbackQuery, env, ctx) {
     ? await approveDraft(id, { env })
     : action === "reject"
       ? await rejectDraft(id, env)
-      : { ok: false, message: "Unknown action." };
+      : action === "source_approve"
+        ? await approveSourceCandidate(env, id)
+        : action === "source_reject"
+          ? await rejectSourceCandidate(env, id)
+          : { ok: false, message: "Unknown action." };
 
   ctx.waitUntil(answerCallbackQuery(env, callbackQuery.id, result.ok ? "Done" : "Failed"));
   ctx.waitUntil(sendTelegramMessage(env, chatId, result.message));
