@@ -121,7 +121,8 @@ export async function runMonitoringCycle(env, event) {
     findings: findings.length,
     demandTopics: demandResult.topics.length,
     draftsCreated: demandResult.drafts.length,
-    dryRun: env.SOCIAL_DRY_RUN !== "false"
+    dryRun: env.SOCIAL_DRY_RUN !== "false",
+    livePublishNetworks: env.LIVE_PUBLISH_NETWORKS || ""
   }));
 
   return {
@@ -131,7 +132,8 @@ export async function runMonitoringCycle(env, event) {
     findings: findings.length,
     demandTopics: demandResult.topics.length,
     draftsCreated: demandResult.drafts.length,
-    dryRun: env.SOCIAL_DRY_RUN !== "false"
+    dryRun: env.SOCIAL_DRY_RUN !== "false",
+    livePublishNetworks: env.LIVE_PUBLISH_NETWORKS || ""
   };
 }
 

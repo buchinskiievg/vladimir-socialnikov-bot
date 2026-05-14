@@ -40,7 +40,7 @@ export async function routeCommand(text, context) {
       "/test-publish - dry-run check all configured publishing connectors",
       "/post <text> - publish text to connected social networks",
       "",
-      "Publishing is in dry-run mode until SOCIAL_DRY_RUN=false and real API credentials are configured."
+      "Publishing is in dry-run mode unless a network is listed in LIVE_PUBLISH_NETWORKS or SOCIAL_DRY_RUN=false."
     ].join("\n");
   }
 
@@ -185,6 +185,7 @@ export async function routeCommand(text, context) {
 
 function buildStatus(env) {
   const dryRun = env.SOCIAL_DRY_RUN !== "false";
+  const liveNetworks = env.LIVE_PUBLISH_NETWORKS || "";
   const connectors = [
     ["LinkedIn", Boolean(env.LINKEDIN_ACCESS_TOKEN)],
     ["Reddit", Boolean(env.REDDIT_CLIENT_ID)],
@@ -199,6 +200,7 @@ function buildStatus(env) {
   return [
     "Status:",
     `Dry run: ${dryRun ? "on" : "off"}`,
+    `Live publish networks: ${liveNetworks || "none"}`,
     `D1 database: ${env.DB ? "connected" : "not connected"}`,
     ...connectors.map(([name, enabled]) => `${name}: ${enabled ? "configured" : "not configured"}`)
   ].join("\n");

@@ -122,7 +122,7 @@ export async function approveDraft(id, context) {
     target: draft.target || "all",
     imageUrl: draft.imageUrl || ""
   }, context.env);
-  const dryRun = isDryRun(context.env);
+  const dryRun = isDryRun(context.env) && publishResult.dryRun;
   await updateDraftStatus(context.env, id, publishResult.ok ? (dryRun ? "approved_dry_run" : "published") : "publish_failed");
 
   const lines = [
