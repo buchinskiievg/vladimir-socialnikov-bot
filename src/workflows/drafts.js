@@ -1,10 +1,20 @@
 import { publishToSocials } from "../social/index.js";
 import { isDryRun } from "../social/shared.js";
-import { insertDraft, listDraftsByStatus, readDraft, updateDraftImage, updateDraftStatus, updateDraftText } from "../storage/drafts.js";
+import {
+  insertDraft,
+  listDraftsByStatus,
+  readDraft,
+  supersedeAllPendingDrafts,
+  supersedePendingDraftsForTarget,
+  updateDraftImage,
+  updateDraftStatus,
+  updateDraftText
+} from "../storage/drafts.js";
 
 export async function createDraftFromTopic(topic, context) {
   const id = crypto.randomUUID().slice(0, 8);
   const target = context.target || "all";
+  await supersedePendingDraftsForTarget(context.env, { topic, target });
   const text = await generateDraftText(topic, context.env, context.finding || null, target);
   const draft = {
     id,
@@ -27,6 +37,16 @@ export async function createDraftFromTopic(topic, context) {
 
 export async function listPendingDrafts(env) {
   return listDraftsByStatus(env, "pending");
+}
+
+export async function cleanupPendingDrafts(env) {
+  const count = await supersedeAllPendingDrafts(env);
+  return {
+    ok: true,
+    message: count
+      ? `Removed ${count} obsolete post(s) from approval queue.`
+      : "Approval queue is already clean."
+  };
 }
 
 export async function reviseDraft(id, instruction, context) {
@@ -127,6 +147,7 @@ export async function createDraftFromFinding(finding, env) {
   const topic = finding.topic || "industry news";
   const id = crypto.randomUUID().slice(0, 8);
   const target = finding.target || "all";
+  await supersedePendingDraftsForTarget(env, { topic, target });
   const text = await generateDraftText(topic, env, finding, target);
   const draft = {
     id,

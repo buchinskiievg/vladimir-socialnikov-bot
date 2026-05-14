@@ -24,6 +24,46 @@ export async function insertDraft(env, draft) {
     .run();
 }
 
+export async function supersedePendingDraftsForTarget(env, { topic, target }) {
+  if (!env.DB) {
+    for (const [id, draft] of memoryDrafts.entries()) {
+      if (draft.status === "pending" && draft.topic === topic && (draft.target || "all") === (target || "all")) {
+        memoryDrafts.set(id, { ...draft, status: "superseded", updatedAt: new Date().toISOString() });
+      }
+    }
+    return 0;
+  }
+
+  const result = await env.DB.prepare(
+    "update drafts set status = 'superseded', updated_at = ? where status = 'pending' and topic = ? and coalesce(target, 'all') = ?"
+  )
+    .bind(new Date().toISOString(), topic, target || "all")
+    .run();
+
+  return result.meta?.changes || 0;
+}
+
+export async function supersedeAllPendingDrafts(env) {
+  if (!env.DB) {
+    let count = 0;
+    for (const [id, draft] of memoryDrafts.entries()) {
+      if (draft.status === "pending") {
+        memoryDrafts.set(id, { ...draft, status: "superseded", updatedAt: new Date().toISOString() });
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  const result = await env.DB.prepare(
+    "update drafts set status = 'superseded', updated_at = ? where status = 'pending'"
+  )
+    .bind(new Date().toISOString())
+    .run();
+
+  return result.meta?.changes || 0;
+}
+
 export async function readDraft(env, id) {
   if (!env.DB) return memoryDrafts.get(id) || null;
 

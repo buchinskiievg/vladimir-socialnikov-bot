@@ -229,7 +229,8 @@ function formatDraft(draft) {
 
 function formatApprovalHeader(draft) {
   return [
-    `For approval: ${formatTargetLabel(draft.target)}`,
+    "FOR APPROVAL",
+    `Channel: ${formatTargetLabel(draft.target)}`,
     `Account: ${formatAccountLabel(draft.target)}`
   ].join("\n");
 }

@@ -1,5 +1,5 @@
 import { publishToSocials } from "./social/index.js";
-import { approveDraft, createDraftFromTopic, listPendingDrafts, rejectDraft } from "./workflows/drafts.js";
+import { approveDraft, cleanupPendingDrafts, createDraftFromTopic, listPendingDrafts, rejectDraft } from "./workflows/drafts.js";
 import { addSource, listSources } from "./storage/sources.js";
 import { seedGoogleNewsSources } from "./monitoring/google-news.js";
 import { listLeadsByStatus } from "./storage/leads.js";
@@ -25,6 +25,7 @@ export async function routeCommand(text, context) {
       "Commands:",
       "/status - check configuration",
       "/pending - list final posts waiting for approval",
+      "/cleanup-pending - remove obsolete posts from approval queue",
       "/approve <id> - publish the approved post",
       "/reject <id> - reject the post",
       "/reset - clear current dialogue state",
@@ -140,6 +141,11 @@ export async function routeCommand(text, context) {
     return formatPendingDrafts(drafts);
   }
 
+  if (firstLine === "/cleanup-pending") {
+    const result = await cleanupPendingDrafts(context.env);
+    return result.message;
+  }
+
   if (firstLine.startsWith("/approve ")) {
     const id = firstLine.slice("/approve ".length).trim();
     if (!id) return "Post id is empty.";
@@ -229,7 +235,8 @@ function draftButtons(id) {
 
 function formatApprovalHeader(draft) {
   return [
-    `For approval: ${formatTargetLabel(draft.target)}`,
+    "FOR APPROVAL",
+    `Channel: ${formatTargetLabel(draft.target)}`,
     `Account: ${formatAccountLabel(draft.target)}`
   ].join("\n");
 }

@@ -1,5 +1,5 @@
 import { generateClarifyingQuestion, generateDialogueReply, parseDialogueTurn } from "./ai/gemini.js";
-import { createDraftFromTopic, listPendingDrafts, regenerateDraftImage, reviseDraft } from "./workflows/drafts.js";
+import { cleanupPendingDrafts, createDraftFromTopic, listPendingDrafts, regenerateDraftImage, reviseDraft } from "./workflows/drafts.js";
 import { buildRedditDiscoveryMessages, discoverRedditCommunities } from "./workflows/reddit-discovery.js";
 import {
   appendChatMessage,
@@ -60,6 +60,7 @@ function fallbackDialogueTurn(message, fastMemory) {
   if (hasAny(lower, ["\u043e\u0442\u0447\u0435\u0442", "\u043e\u0442\u0447\u0451\u0442", "report"])) return { intent: "report" };
   if (hasAny(lower, ["\u043b\u0438\u0434", "lead"])) return { intent: "leads" };
   if (hasAny(lower, ["\u043f\u0440\u043e\u0432\u0435\u0440\u043a", "pending"])) return { intent: "pending" };
+  if (looksLikeCleanupRequest(text)) return { intent: "cleanup_pending" };
   if (looksLikeRedditDiscovery(text)) return { intent: "find_reddit_communities", topic: cleanupFallbackTopic(text) };
   if (fastMemory?.pendingIntent === "create_drafts") {
     return { intent: "provide_topic", topic: text, targets: fastMemory.pendingTargets || ["all"] };
@@ -142,6 +143,10 @@ async function executeDialogueTurn(turn, context) {
   if (turn.intent === "report") return "/report";
   if (turn.intent === "pending") return "/pending";
   if (turn.intent === "leads") return "/leads";
+  if (turn.intent === "cleanup_pending") {
+    const result = await cleanupPendingDrafts(env);
+    return result.message;
+  }
   if (turn.intent === "find_reddit_communities") {
     const topic = turn.topic || context.message.text || "";
     const result = await discoverRedditCommunities(env, { topic });
@@ -454,6 +459,12 @@ function looksLikeRedditDiscovery(text) {
     && hasAny(lower, ["\u043d\u0430\u0439\u0434", "\u043f\u043e\u0434\u0431\u0435\u0440", "\u043f\u043e\u0438\u0449", "\u0440\u0435\u043b\u0435\u0432\u0430\u043d\u0442", "find", "search", "discover", "relevant"]);
 }
 
+function looksLikeCleanupRequest(text) {
+  const lower = String(text || "").toLowerCase();
+  return hasAny(lower, ["\u0443\u0434\u0430\u043b", "\u0443\u0431\u0435\u0440", "\u043e\u0447\u0438\u0441\u0442", "\u0441\u043d\u0438\u043c\u0438", "delete", "remove", "clean"])
+    && hasAny(lower, ["\u043d\u0435\u0430\u043a\u0442\u0443\u0430\u043b", "\u0441\u0442\u0430\u0440", "pending", "\u043e\u0447\u0435\u0440\u0435\u0434", "\u043f\u043e\u0441\u0442", "\u043f\u0443\u0431\u043b\u0438\u043a"]);
+}
+
 function inferTargets(text) {
   const lower = String(text || "").toLowerCase();
   const targets = [];
@@ -522,7 +533,8 @@ function formatImageUpdates(drafts) {
 
 function formatApprovalHeader(draft) {
   return [
-    `For approval: ${formatTargetLabel(draft.target)}`,
+    "FOR APPROVAL",
+    `Channel: ${formatTargetLabel(draft.target)}`,
     `Account: ${formatAccountLabel(draft.target)}`
   ].join("\n");
 }
