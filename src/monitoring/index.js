@@ -18,7 +18,7 @@ import { scoreLeadPotential, scoreMaterial } from "../scoring/material-score.js"
 
 export async function runMonitoringCycle(env, event) {
   const startedAt = new Date().toISOString();
-  const sources = filterSources(await listSources(env), event);
+  const sources = filterSources(await listSources(env), event, env);
   const findings = [];
   await pruneExpiredFindingSentences(env, startedAt);
 
@@ -135,15 +135,44 @@ export async function runMonitoringCycle(env, event) {
   };
 }
 
-function filterSources(sources, event = {}) {
+function filterSources(sources, event = {}, env = {}) {
   const allowedTypes = Array.isArray(event.sourceTypes) && event.sourceTypes.length
     ? new Set(event.sourceTypes)
     : null;
-  const limit = Number(event.limit || 0);
-  const offset = Number(event.offset || 0);
-  const filtered = allowedTypes ? sources.filter((source) => allowedTypes.has(source.type)) : sources;
-  const sliced = offset > 0 ? filtered.slice(offset) : filtered;
+  const requestedLimit = Number(event.limit || 0);
+  const scheduledLimit = event.cron && event.cron !== "manual"
+    ? Number(env.MAX_SOURCES_PER_MONITORING_RUN || 25)
+    : 0;
+  const limit = requestedLimit || scheduledLimit;
+  const offset = Number(event.offset || 0) || scheduledOffset(event, sources.length, limit);
+  const filtered = allowedTypes
+    ? sources.filter((source) => allowedTypes.has(source.type))
+    : prioritizeSources(sources);
+  const sliced = offset > 0 ? rotate(filtered, offset) : filtered;
   return limit > 0 ? sliced.slice(0, limit) : sliced;
+}
+
+function prioritizeSources(sources) {
+  const priority = { google_news: 0, rss: 1, news: 2, reddit: 3, forum: 4, facebook_group: 5, classifieds: 6 };
+  return [...sources].sort((a, b) => {
+    const pa = priority[a.type] ?? 9;
+    const pb = priority[b.type] ?? 9;
+    if (pa !== pb) return pa - pb;
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  });
+}
+
+function scheduledOffset(event, total, limit) {
+  if (!limit || !total) return 0;
+  const scheduledTime = Number(event.scheduledTime || Date.now());
+  const bucket = Math.floor(scheduledTime / (6 * 60 * 60 * 1000));
+  return (bucket * limit) % total;
+}
+
+function rotate(items, offset) {
+  if (!items.length) return items;
+  const safeOffset = offset % items.length;
+  return [...items.slice(safeOffset), ...items.slice(0, safeOffset)];
 }
 
 async function fetchSourceItems(source, env) {

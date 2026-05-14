@@ -328,7 +328,7 @@ async function handleNaturalLanguage(message, context) {
       ].join("\n");
     }
 
-    const targets = overrideTargetsFromText(trimmed, normalizeTargets(intent.targets));
+    const targets = overrideTargetsFromText(message, normalizeTargets(intent.targets));
     const drafts = [];
     for (const target of targets) {
       drafts.push(await createDraftFromTopic(intent.topic, { ...context, target }));
@@ -414,6 +414,16 @@ function normalizeIntent(intent) {
 
 function heuristicIntent(message) {
   const lower = message.toLowerCase();
+  if (hasAny(lower, ["\u0441\u0433\u0435\u043d\u0435\u0440", "\u0441\u043e\u0437\u0434\u0430\u0439 \u043f\u043e\u0441\u0442", "\u0441\u0434\u0435\u043b\u0430\u0439 \u043f\u043e\u0441\u0442", "\u043d\u0430\u043f\u0438\u0448\u0438 \u043f\u043e\u0441\u0442", "\u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432", "generate post", "create post", "write post"])) {
+    const targets = [];
+    if (lower.includes("linkedin") || lower.includes("\u043b\u0438\u043d\u043a\u0435\u0434\u0438\u043d")) {
+      if (lower.includes("\u043a\u043e\u043c\u043f\u0430\u043d") || lower.includes("\u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0446") || lower.includes("company") || lower.includes("ieccalc")) targets.push("linkedin_company");
+      if (lower.includes("\u043b\u0438\u0447\u043d") || lower.includes("\u043f\u0435\u0440\u0441\u043e\u043d\u0430\u043b") || lower.includes("personal")) targets.push("linkedin_personal");
+      if (!targets.length) targets.push("linkedin_personal");
+    }
+    const topic = extractTopicNatural(message) || extractTopicHeuristic(message);
+    return { intent: "create_drafts", topic, targets: targets.length ? targets : ["all"], needs_topic: !topic };
+  }
   if (lower.includes("статус") || lower.includes("status")) return { intent: "status", topic: "", targets: [], needs_topic: false };
   if (lower.includes("отчет") || lower.includes("отчёт") || lower.includes("report")) return { intent: "report", topic: "", targets: [], needs_topic: false };
   if (lower.includes("лид")) return { intent: "leads", topic: "", targets: [], needs_topic: false };
@@ -421,10 +431,19 @@ function heuristicIntent(message) {
     const targets = [];
     if (lower.includes("личн") || lower.includes("персональн") || lower.includes("personal")) targets.push("linkedin_personal");
     if (lower.includes("компан") || lower.includes("организац") || lower.includes("company") || lower.includes("ieccalc")) targets.push("linkedin_company");
-    const topic = extractTopicHeuristic(message);
+    const topic = extractTopicNatural(message) || extractTopicHeuristic(message);
     return { intent: "create_drafts", topic, targets: targets.length ? targets : ["all"], needs_topic: !topic };
   }
   return { intent: "unknown", topic: "", targets: [], needs_topic: false };
+}
+
+function extractTopicNatural(message) {
+  const match = String(message || "").match(/(?:\u043f\u043e \u0442\u0435\u043c\u0435|\u043d\u0430 \u0442\u0435\u043c\u0443|\u043f\u0440\u043e|about)\s*[-:]?\s+(.+)$/i);
+  if (!match) return "";
+  return String(match[1] || "")
+    .replace(/\b(?:\u0447\u0435\u0440\u0435\u0437|\u043f\u0440\u043e\u0433\u043e\u043d\u044f\u0439|\u043f\u0440\u043e\u0433\u043e\u043d\u0438)\s+(?:ai|\u0438\u0438|al)\b.*$/i, "")
+    .replace(/[.。]+$/g, "")
+    .trim();
 }
 
 function extractTopicHeuristic(message) {
@@ -471,4 +490,8 @@ function overrideTargetsFromText(text, targets) {
 function formatMultipleDrafts(drafts) {
   if (drafts.length === 1) return formatDraft(drafts[0]);
   return { messages: drafts.map(formatDraft) };
+}
+
+function hasAny(text, markers) {
+  return markers.some((marker) => text.includes(marker));
 }

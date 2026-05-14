@@ -317,6 +317,8 @@ function startsNewDraftRequest(text) {
   const lower = String(text || "").toLowerCase();
   return hasAny(lower, [
     "\u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432",
+    "\u0441\u0433\u0435\u043d\u0435\u0440",
+    "\u0441\u043e\u0437\u0434\u0430\u0439 \u043f\u043e\u0441\u0442",
     "\u0441\u0434\u0435\u043b\u0430\u0439 \u043f\u043e\u0441\u0442",
     "\u0441\u0434\u0435\u043b\u0430\u0439 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446",
     "\u043d\u0430\u043f\u0438\u0448\u0438 \u043f\u043e\u0441\u0442",
@@ -324,6 +326,8 @@ function startsNewDraftRequest(text) {
     "\u043f\u043e\u0441\u0442 \u0434\u043b\u044f",
     "\u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446",
     "draft",
+    "generate post",
+    "create post",
     "prepare",
     "write a post"
   ]);
