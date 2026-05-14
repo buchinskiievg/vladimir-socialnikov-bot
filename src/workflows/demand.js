@@ -1,4 +1,5 @@
 import { createDraftFromTopic } from "./drafts.js";
+import { hasPublishedPost } from "../storage/published-history.js";
 
 export async function createDraftsFromDemand(findings, env) {
   const maxDrafts = Number(env.MAX_DEMAND_TOPICS_PER_MONITORING_RUN || env.MAX_DRAFTS_PER_MONITORING_RUN || 3);
@@ -7,9 +8,13 @@ export async function createDraftsFromDemand(findings, env) {
   const topics = await findDemandTopics(findings, env);
   const drafts = [];
 
-  for (const item of topics.sort((a, b) => Number(b.score || 0) - Number(a.score || 0)).slice(0, maxDrafts)) {
+  const selectedTopics = [];
+  for (const item of topics.sort((a, b) => Number(b.score || 0) - Number(a.score || 0))) {
+    if (drafts.length >= maxDrafts) break;
     const target = normalizeTarget(item.target);
     const topic = cleanTopic(item.topic);
+    if (await hasPublishedPost(env, { topic, target })) continue;
+    selectedTopics.push(item);
     drafts.push(await createDraftFromTopic(topic, {
       env,
       target,
@@ -21,7 +26,7 @@ export async function createDraftsFromDemand(findings, env) {
     }));
   }
 
-  return { topics: topics.slice(0, maxDrafts), drafts };
+  return { topics: selectedTopics, drafts };
 }
 
 async function findDemandTopics(findings, env) {

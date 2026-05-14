@@ -1,5 +1,6 @@
 import { publishToSocials } from "../social/index.js";
 import { isDryRun } from "../social/shared.js";
+import { rememberPublishedPost } from "../storage/published-history.js";
 import {
   insertDraft,
   listDraftsByStatus,
@@ -124,6 +125,17 @@ export async function approveDraft(id, context) {
   }, context.env);
   const dryRun = isDryRun(context.env) && publishResult.dryRun;
   await updateDraftStatus(context.env, id, publishResult.ok ? (dryRun ? "approved_dry_run" : "published") : "publish_failed");
+  if (publishResult.ok && !dryRun) {
+    await rememberPublishedPost(context.env, {
+      draftId: draft.id,
+      target: draft.target || "all",
+      topic: draft.topic,
+      sourceUrl: draft.source && draft.source !== "telegram" ? draft.source : "",
+      networks: publishResult.results
+        .filter((item) => item.ok && !item.dryRun)
+        .map((item) => item.network)
+    });
+  }
 
   const lines = [
     `Post ${id}: ${publishResult.ok ? (dryRun ? "approved in dry run; not published" : "published") : "publish failed"}`,
