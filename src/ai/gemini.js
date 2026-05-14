@@ -529,7 +529,8 @@ export async function generateClarifyingQuestion({ message, missing, fastMemory,
               "Do not mention JSON, commands, parsers, intents, or internal tools.",
               "Do not apologize. Do not provide a menu unless it is genuinely helpful.",
               "Use the user's wording and context. Be specific about what detail is missing.",
-              "If the missing detail is a post topic, ask what the post should be about.",
+              "If the missing detail is a post topic, ask whether Evgenii wants to give his own topic or wants you to choose one from the most popular topics selected by the monitoring algorithm.",
+              "For missing post topic, phrase the question naturally like: 'Сделать пост на твою тему или выбрать тему из самых сильных находок мониторинга?'",
               "If the missing detail is a replacement topic, ask what new topic to use.",
               "If target/social network is unclear, ask where to prepare it, but only if the topic is already clear."
             ].join(" ")
