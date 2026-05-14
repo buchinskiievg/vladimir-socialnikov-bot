@@ -6,6 +6,7 @@ import { listLeadsByStatus } from "./storage/leads.js";
 import { buildDailyReport } from "./reports/daily.js";
 import { handleDialogue } from "./dialogue.js";
 import { resetDialogue } from "./dialogue.js";
+import { discoverRedditCommunities, formatRedditDiscovery } from "./workflows/reddit-discovery.js";
 import {
   listTopicPreferences,
   seedDefaultTopicPreferences,
@@ -34,6 +35,7 @@ export async function routeCommand(text, context) {
       "/report - daily monitoring report",
       "/memory - check dialogue memory storage",
       "/topics - show proposed/active topic strategy",
+      "/reddit-discover [topic] - find relevant Reddit communities",
       "/test-publish - dry-run check all configured publishing connectors",
       "/post <text> - publish text to connected social networks",
       "",
@@ -119,6 +121,11 @@ export async function routeCommand(text, context) {
   if (firstLine === "/topics") {
     await seedDefaultTopicPreferences(context.env, "proposed");
     return formatTopicPreferences(await listTopicPreferences(context.env));
+  }
+
+  if (firstLine === "/reddit-discover" || firstLine.startsWith("/reddit-discover ")) {
+    const topic = firstLine.slice("/reddit-discover".length).trim();
+    return formatRedditDiscovery(await discoverRedditCommunities(context.env, { topic }));
   }
 
   if (firstLine === "/test-publish") {

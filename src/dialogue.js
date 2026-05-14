@@ -1,5 +1,6 @@
 import { generateClarifyingQuestion, generateDialogueReply, parseDialogueTurn } from "./ai/gemini.js";
 import { createDraftFromTopic, listPendingDrafts, regenerateDraftImage, reviseDraft } from "./workflows/drafts.js";
+import { discoverRedditCommunities, formatRedditDiscovery } from "./workflows/reddit-discovery.js";
 import {
   appendChatMessage,
   archiveMessageToSlowMemory,
@@ -59,6 +60,7 @@ function fallbackDialogueTurn(message, fastMemory) {
   if (hasAny(lower, ["\u043e\u0442\u0447\u0435\u0442", "\u043e\u0442\u0447\u0451\u0442", "report"])) return { intent: "report" };
   if (hasAny(lower, ["\u043b\u0438\u0434", "lead"])) return { intent: "leads" };
   if (hasAny(lower, ["\u043f\u0440\u043e\u0432\u0435\u0440\u043a", "pending"])) return { intent: "pending" };
+  if (looksLikeRedditDiscovery(text)) return { intent: "find_reddit_communities", topic: cleanupFallbackTopic(text) };
   if (fastMemory?.pendingIntent === "create_drafts") {
     return { intent: "provide_topic", topic: text, targets: fastMemory.pendingTargets || ["all"] };
   }
@@ -140,6 +142,10 @@ async function executeDialogueTurn(turn, context) {
   if (turn.intent === "report") return "/report";
   if (turn.intent === "pending") return "/pending";
   if (turn.intent === "leads") return "/leads";
+  if (turn.intent === "find_reddit_communities") {
+    const result = await discoverRedditCommunities(env, { topic: turn.topic || context.message.text || "" });
+    return formatRedditDiscovery(result);
+  }
 
   if (turn.intent === "chat") {
     return await buildBrainReply(context, turn.reply);
@@ -439,6 +445,12 @@ function extractDraftIds(text) {
 function mentionsPlatform(text) {
   const lower = String(text || "").toLowerCase();
   return hasAny(lower, ["linkedin", "\u043b\u0438\u043d\u043a\u0435\u0434\u0438\u043d", "facebook", "\u0444\u0435\u0439\u0441\u0431\u0443\u043a", "instagram", "\u0438\u043d\u0441\u0442\u0430\u0433\u0440\u0430\u043c", "threads", "reddit"]);
+}
+
+function looksLikeRedditDiscovery(text) {
+  const lower = String(text || "").toLowerCase();
+  return hasAny(lower, ["reddit", "subreddit", "\u0441\u0430\u0431\u0440\u0435\u0434\u0434\u0438\u0442"])
+    && hasAny(lower, ["\u043d\u0430\u0439\u0434", "\u043f\u043e\u0434\u0431\u0435\u0440", "\u043f\u043e\u0438\u0449", "\u0440\u0435\u043b\u0435\u0432\u0430\u043d\u0442", "find", "search", "discover", "relevant"]);
 }
 
 function inferTargets(text) {
