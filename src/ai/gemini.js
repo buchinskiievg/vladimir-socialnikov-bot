@@ -51,6 +51,7 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               "For Facebook, use a practical hook, 3-5 readable points, and a simple question.",
               "For Instagram, use a concise caption that works with the infographic.",
               "For Threads, use a compact post with one sharp idea.",
+              finding?.url ? "Because this post is based on an external material, include the exact source URL at the end as 'Source: <url>'." : "Do not add a source line because this is a user-provided topic without an external source.",
               "End with the platform-appropriate number of relevant professional hashtags.",
               "",
               "Naturally include search phrases engineers might use, such as standard numbers, voltage levels, software names, equipment names, or calculation terms when relevant.",
@@ -77,7 +78,15 @@ export async function generatePostDraft({ topic, finding, target }, env) {
     .trim();
 
   const finalText = text || fallbackDraft(topic, finding, "empty model output", target);
-  return polishPostStart(ensurePlatformLength(finalText, { topic, target }), { topic, target });
+  return ensureSourceLine(polishPostStart(ensurePlatformLength(finalText, { topic, target }), { topic, target }), finding);
+}
+
+function ensureSourceLine(text, finding) {
+  const url = String(finding?.url || "").trim();
+  if (!url) return text;
+  const clean = String(text || "").trim();
+  if (clean.includes(url)) return clean;
+  return `${clean}\n\nSource: ${url}`;
 }
 
 function ensurePlatformLength(text, { topic, target }) {
