@@ -1,4 +1,5 @@
 import { publishToSocials } from "../social/index.js";
+import { isDryRun } from "../social/shared.js";
 import { insertDraft, listDraftsByStatus, readDraft, updateDraftImage, updateDraftStatus, updateDraftText } from "../storage/drafts.js";
 
 export async function createDraftFromTopic(topic, context) {
@@ -101,9 +102,13 @@ export async function approveDraft(id, context) {
     target: draft.target || "all",
     imageUrl: draft.imageUrl || ""
   }, context.env);
-  await updateDraftStatus(context.env, id, publishResult.ok ? "published" : "publish_failed");
+  const dryRun = isDryRun(context.env);
+  await updateDraftStatus(context.env, id, publishResult.ok ? (dryRun ? "approved_dry_run" : "published") : "publish_failed");
 
-  const lines = [`Post ${id}: ${publishResult.ok ? "published" : "publish failed"}`];
+  const lines = [
+    `Post ${id}: ${publishResult.ok ? (dryRun ? "approved in dry run; not published" : "published") : "publish failed"}`,
+    `Target: ${draft.target || "all"}`
+  ];
   for (const item of publishResult.results) {
     lines.push(`${item.network}: ${item.ok ? "ok" : "failed"}${item.message ? ` - ${item.message}` : ""}`);
   }
