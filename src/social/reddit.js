@@ -1,6 +1,11 @@
 import { isDryRun, truncateForNetwork } from "./shared.js";
+import { executeComposioTool } from "./composio.js";
 
 export async function publishReddit(post, env) {
+  if (env.COMPOSIO_API_KEY && env.COMPOSIO_REDDIT_ACCOUNT_ID) {
+    return publishRedditViaComposio(post, env);
+  }
+
   if (!env.REDDIT_CLIENT_ID || !env.REDDIT_CLIENT_SECRET || !env.REDDIT_REFRESH_TOKEN) {
     return { ok: false, message: "missing Reddit OAuth credentials" };
   }
@@ -42,6 +47,29 @@ export async function publishReddit(post, env) {
   }
 
   return { ok: true, message: body?.json?.data?.url || "submitted" };
+}
+
+async function publishRedditViaComposio(post, env) {
+  const subreddit = env.REDDIT_SUBREDDIT;
+  if (!subreddit) {
+    return { ok: false, message: "missing REDDIT_SUBREDDIT" };
+  }
+
+  if (isDryRun(env)) {
+    return { ok: true, message: `dry run via Composio to r/${subreddit}` };
+  }
+
+  const title = truncateForNetwork(post.title || firstLine(post.text), 300);
+  const result = await executeComposioTool(env, "REDDIT_CREATE_REDDIT_POST", env.COMPOSIO_REDDIT_ACCOUNT_ID, {
+    subreddit,
+    title,
+    body: post.text,
+    kind: "self"
+  });
+
+  return result.ok
+    ? { ok: true, message: result.data?.permalink || result.message || "submitted via Composio" }
+    : result;
 }
 
 async function getRedditAccessToken(env) {
