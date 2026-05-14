@@ -26,40 +26,6 @@ export async function handleDialogue(message, context) {
 
   const fastMemory = await readFastMemory(env, chatId);
   const recentMessages = await listRecentMessages(env, chatId, 16);
-  const newDraftRequest = startsNewDraftRequest(text);
-  const explicitTopic = extractExplicitTopic(text);
-
-  if (!newDraftRequest && looksLikeDraftRevision(text)) {
-    return rememberAndReturn(env, chatId, await handleDraftRevision(text, { ...context, fastMemory, chatId }));
-  }
-
-  if (newDraftRequest && !explicitTopic) {
-    const targets = inferTargets(text);
-    await writeFastMemory(env, {
-      ...fastMemory,
-      chatId,
-      updatedAt: new Date().toISOString(),
-      pendingIntent: "create_drafts",
-      pendingTargets: targets,
-      pendingTopicHint: ""
-    });
-    return rememberAndReturn(env, chatId, REPLY_ASK_TOPIC);
-  }
-
-  if (newDraftRequest && explicitTopic) {
-    const turn = { intent: "create_drafts", topic: explicitTopic, targets: inferTargets(text) };
-    return rememberAndReturn(
-      env,
-      chatId,
-      await executeDialogueTurn(turn, {
-        ...context,
-        message,
-        fastMemory: { ...fastMemory, pendingIntent: "", pendingTargets: [], pendingTopicHint: "" },
-        recentMessages
-      })
-    );
-  }
-
   const turn = await parseTurnWithFallback({ message: text, fastMemory, recentMessages }, env);
   return rememberAndReturn(env, chatId, await executeDialogueTurn(turn, { ...context, message, fastMemory, recentMessages }));
 }
@@ -137,6 +103,27 @@ async function executeDialogueTurn(turn, context) {
   if (turn.intent === "provide_topic" && fastMemory.pendingIntent === "create_drafts") {
     const topic = cleanupFallbackTopic(turn.topic || context.message.text || "");
     const targets = overrideTargetsFromText(context.message.text, normalizeTargets(fastMemory.pendingTargets));
+    const drafts = [];
+    for (const target of targets) {
+      drafts.push(await createDraftFromTopic(topic, { ...context, target }));
+    }
+    await rememberDrafts(env, fastMemory, chatId, drafts);
+    return formatDrafts(drafts);
+  }
+
+  if (turn.intent === "revise_image") {
+    return await handleImageRevision(context.message.text || "", { ...context, fastMemory, chatId });
+  }
+
+  if (turn.intent === "revise_text") {
+    return await handleTextRevision(context.message.text || "", { ...context, fastMemory, chatId });
+  }
+
+  if (turn.intent === "change_topic") {
+    const topic = cleanupFallbackTopic(turn.topic || "");
+    if (!topic) return REPLY_ASK_TOPIC;
+    const summary = readSummary(fastMemory);
+    const targets = overrideTargetsFromText(context.message.text, normalizeTargets(turn.targets?.length ? turn.targets : summary.recentDraftTargets || ["all"]));
     const drafts = [];
     for (const target of targets) {
       drafts.push(await createDraftFromTopic(topic, { ...context, target }));
@@ -231,6 +218,48 @@ async function handleDraftRevision(text, context) {
   }
 
   if (!updated.length) return "\u041d\u0435 \u0441\u043c\u043e\u0433 \u043d\u0430\u0439\u0442\u0438 \u043f\u043e\u0434\u0445\u043e\u0434\u044f\u0449\u0438\u0439 \u043f\u043e\u0441\u0442 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443 \u0434\u043b\u044f \u043f\u0440\u0430\u0432\u043a\u0438.";
+  await rememberDrafts(env, fastMemory, context.chatId, updated);
+  return formatDrafts(updated);
+}
+
+async function handleImageRevision(text, context) {
+  const env = context.env;
+  const fastMemory = context.fastMemory;
+  const summary = readSummary(fastMemory);
+  const ids = extractDraftIds(text);
+  const targetIds = ids.length ? ids : await inferDraftIdsForRevision(env, text, summary);
+  if (!targetIds.length) {
+    return "\u041f\u043e\u043d\u044f\u043b, \u043d\u0443\u0436\u043d\u043e \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u044c \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443, \u043d\u043e \u044f \u043d\u0435 \u0432\u0438\u0436\u0443 \u043f\u043e\u0441\u0442\u0430 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443.";
+  }
+
+  const updated = [];
+  for (const id of targetIds) {
+    const result = await regenerateDraftImage(id, text, { env });
+    if (result.ok && result.draft) updated.push(result.draft);
+  }
+
+  if (!updated.length) return "\u041d\u0435 \u0441\u043c\u043e\u0433 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0434\u043b\u044f \u043f\u043e\u0441\u0442\u0430 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443.";
+  await rememberDrafts(env, fastMemory, context.chatId, updated);
+  return formatImageUpdates(updated);
+}
+
+async function handleTextRevision(text, context) {
+  const env = context.env;
+  const fastMemory = context.fastMemory;
+  const summary = readSummary(fastMemory);
+  const ids = extractDraftIds(text);
+  const targetIds = ids.length ? ids : await inferDraftIdsForRevision(env, text, summary);
+  if (!targetIds.length) {
+    return "\u041f\u043e\u043d\u044f\u043b, \u043d\u0443\u0436\u043d\u043e \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u044c \u0442\u0435\u043a\u0441\u0442, \u043d\u043e \u044f \u043d\u0435 \u0432\u0438\u0436\u0443 \u043f\u043e\u0441\u0442\u0430 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443.";
+  }
+
+  const updated = [];
+  for (const id of targetIds) {
+    const result = await reviseDraft(id, text, { env });
+    if (result.ok && result.draft) updated.push(result.draft);
+  }
+
+  if (!updated.length) return "\u041d\u0435 \u0441\u043c\u043e\u0433 \u043d\u0430\u0439\u0442\u0438 \u043f\u043e\u0441\u0442 \u0434\u043b\u044f \u043f\u0440\u0430\u0432\u043a\u0438.";
   await rememberDrafts(env, fastMemory, context.chatId, updated);
   return formatDrafts(updated);
 }

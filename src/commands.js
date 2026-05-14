@@ -281,9 +281,6 @@ function formatLeadBrief(lead) {
 }
 
 async function handleNaturalLanguage(message, context) {
-  const topicManagement = await handleTopicManagement(message, context.env);
-  if (topicManagement) return topicManagement;
-
   if (context.message?.chat?.id) {
     const dialogueResponse = await handleDialogue(context.message, context);
     if (dialogueResponse === "/status") return buildStatus(context.env);
@@ -300,6 +297,9 @@ async function handleNaturalLanguage(message, context) {
     }
     return dialogueResponse;
   }
+
+  const topicManagement = await handleTopicManagement(message, context.env);
+  if (topicManagement) return topicManagement;
 
   const intent = await parseIntent(message, context.env);
 
