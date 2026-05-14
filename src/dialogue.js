@@ -319,7 +319,7 @@ async function handleTextRevision(text, context) {
 
   if (!updated.length) return "\u041d\u0435 \u0441\u043c\u043e\u0433 \u043d\u0430\u0439\u0442\u0438 \u043f\u043e\u0441\u0442 \u0434\u043b\u044f \u043f\u0440\u0430\u0432\u043a\u0438.";
   await rememberDrafts(env, fastMemory, context.chatId, updated);
-  return formatDrafts(updated);
+  return formatDrafts(updated, { includePhoto: false });
 }
 
 async function inferDraftIdsForRevision(env, text, summary) {
@@ -391,8 +391,12 @@ function looksLikeTextRevision(text) {
     "\u0434\u043b\u0438\u043d\u043d\u0435\u0435",
     "\u043a\u043e\u0440\u043e\u0447\u0435",
     "\u043f\u0435\u0440\u0435\u0432\u0435\u0434\u0438",
+    "\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a",
+    "\u0441\u0441\u044b\u043b\u043a",
     "text",
     "caption",
+    "source",
+    "reference",
     "rewrite",
     "translate",
     "shorter",
@@ -499,12 +503,12 @@ function overrideTargetsFromText(text, targets) {
   return targets;
 }
 
-function formatDrafts(drafts) {
+function formatDrafts(drafts, { includePhoto = true } = {}) {
   return {
     messages: drafts.map((draft) => ({
       text: `${formatApprovalHeader(draft)}\n\n${draft.text}`,
       options: {
-        photoUrl: draft.imageUrl || undefined,
+        photoUrl: includePhoto ? draft.imageUrl || undefined : undefined,
         reply_markup: {
           inline_keyboard: draftButtons(draft.id)
         }

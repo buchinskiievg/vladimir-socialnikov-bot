@@ -23,7 +23,7 @@ export async function createDraftFromTopic(topic, context) {
     text,
     status: "pending",
     target,
-    source: "telegram",
+    source: context.finding?.url || "telegram",
     createdAt: new Date().toISOString()
   };
 
@@ -54,6 +54,12 @@ export async function reviseDraft(id, instruction, context) {
   const draft = await readDraft(context.env, id);
   if (!draft) return { ok: false, message: `Post ${id} not found.` };
   if (draft.status !== "pending") return { ok: false, message: `Post ${id} is ${draft.status}.` };
+  if (looksLikeSourceRequest(instruction) && !sourceUrlFromDraft(draft)) {
+    return {
+      ok: false,
+      message: `Post ${id}: I cannot add a source because this draft has no stored source URL. New monitored posts will store it automatically.`
+    };
+  }
 
   const text = await reviseDraftText(draft, instruction, context.env);
   await updateDraftText(context.env, id, text);
@@ -213,6 +219,10 @@ async function generateDraftText(topic, env, finding = null, target = "all") {
 }
 
 async function reviseDraftText(draft, instruction, env) {
+  if (looksLikeSourceRequest(instruction)) {
+    return ensureDraftSourceLine(draft.text, draft);
+  }
+
   if (env.GEMINI_API_KEY) {
     const { revisePostDraft } = await import("../ai/gemini.js");
     return revisePostDraft({ draft, instruction }, env);
@@ -224,4 +234,26 @@ async function reviseDraftText(draft, instruction, env) {
     `Revision requested: ${instruction}`,
     "Manual edit recommended because no LLM provider is connected."
   ].join("\n");
+}
+
+function ensureDraftSourceLine(text, draft) {
+  const sourceUrl = sourceUrlFromDraft(draft);
+  if (!sourceUrl) return text;
+  const clean = String(text || "").trim();
+  if (clean.includes(sourceUrl)) return clean;
+  return `${clean}\n\nSource: ${sourceUrl}`;
+}
+
+function sourceUrlFromDraft(draft) {
+  const source = String(draft?.source || "").trim();
+  if (/^https?:\/\//i.test(source)) return source;
+  return "";
+}
+
+function looksLikeSourceRequest(text) {
+  const lower = String(text || "").toLowerCase();
+  return lower.includes("source")
+    || lower.includes("reference")
+    || lower.includes("источник")
+    || lower.includes("ссылк");
 }
