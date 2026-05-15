@@ -93,6 +93,15 @@ async function executeDialogueTurn(turn, context) {
     return await handleImageRevision(rawText, { ...context, fastMemory, chatId });
   }
 
+  if (fastMemory.pendingIntent === "select_material_for_draft" && looksLikeNumberChoice(rawText)) {
+    return await handleMaterialSelection(rawText, { ...context, fastMemory, chatId });
+  }
+
+  if (shouldShowMaterialChoicesForManualPost(rawText)) {
+    const targets = overrideTargetsFromText(rawText, normalizeTargets(turn.targets || fastMemory.pendingTargets || ["linkedin_personal"]));
+    return await handleAutoSelectedTopic({ ...context, fastMemory: { ...fastMemory, pendingTargets: targets }, chatId });
+  }
+
   if (fastMemory.pendingIntent === "select_material_for_draft") {
     return await handleMaterialSelection(rawText, { ...context, fastMemory, chatId });
   }
@@ -698,6 +707,18 @@ function shouldAutoSelectForDraftRequest(text, topic) {
   if (isOnlyPostAndPlatformRequestFixed(String(text || "").toLowerCase())) return true;
   if (!cleanTopic && (startsNewDraftRequest(text) || mentionsPlatform(text))) return true;
   return false;
+}
+
+function shouldShowMaterialChoicesForManualPost(text) {
+  const lower = String(text || "").toLowerCase();
+  if (!startsNewDraftRequest(text) && !mentionsPlatform(text)) return false;
+  if (hasAny(lower, ["\u0434\u0440\u0443\u0433\u043e\u0439 \u043f\u043e\u0441\u0442", "\u0434\u0440\u0443\u0433\u0443\u044e \u043f\u0443\u0431\u043b\u0438\u043a", "\u043d\u043e\u0432\u044b\u0439 \u043f\u043e\u0441\u0442", "\u0435\u0449\u0435 \u043f\u043e\u0441\u0442", "\u0435\u0449\u0451 \u043f\u043e\u0441\u0442", "another post", "new post"])) return true;
+  if (extractExplicitTopic(text)) return false;
+  return isOnlyPostAndPlatformRequestFixed(lower) || hasAny(lower, ["\u043f\u043e\u0434\u0431\u0435\u0440\u0438", "\u0432\u044b\u0431\u0435\u0440\u0438", "\u0441\u0430\u043c", "\u043f\u043e\u043f\u0443\u043b\u044f\u0440", "\u043b\u0443\u0447\u0448", "\u043d\u0430\u0439\u0434\u0438"]);
+}
+
+function looksLikeNumberChoice(text) {
+  return /^\s*[1-5]\s*$/i.test(String(text || ""));
 }
 
 function shouldHonorAutoSelectIntent(text, fastMemory) {
