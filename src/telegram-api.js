@@ -9,9 +9,9 @@ export async function sendTelegramMessage(env, chatId, text, options = {}) {
     await sendTelegramText(env, chatId, text, messageOptions);
     try {
       if (String(options.photoUrl).toLowerCase().includes(".svg")) {
-        await sendTelegramDocument(env, chatId, options.photoUrl, "");
+        await sendTelegramDocument(env, chatId, options.photoUrl, "Image for approval", messageOptions);
       } else {
-        await sendTelegramPhoto(env, chatId, options.photoUrl, "");
+        await sendTelegramPhoto(env, chatId, options.photoUrl, "Image for approval", messageOptions);
       }
     } catch (error) {
       console.log(JSON.stringify({ ok: false, job: "telegram-send-photo", chatId, error: error.message }));
@@ -89,7 +89,7 @@ async function sendTelegramText(env, chatId, text, options = {}) {
   console.log(JSON.stringify({ ok: true, job: "telegram-send-message", chatId, messageId: body.result?.message_id || null }));
 }
 
-async function sendTelegramPhoto(env, chatId, photoUrl, caption) {
+async function sendTelegramPhoto(env, chatId, photoUrl, caption, options = {}) {
   const token = env.TELEGRAM_BOT_TOKEN;
   const response = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
     method: "POST",
@@ -97,7 +97,8 @@ async function sendTelegramPhoto(env, chatId, photoUrl, caption) {
     body: JSON.stringify({
       chat_id: chatId,
       photo: photoUrl,
-      caption: String(caption || "").slice(0, 1024)
+      caption: String(caption || "").slice(0, 1024),
+      ...options
     })
   });
 
@@ -109,7 +110,7 @@ async function sendTelegramPhoto(env, chatId, photoUrl, caption) {
   console.log(JSON.stringify({ ok: true, job: "telegram-send-photo", chatId, messageId: body.result?.message_id || null }));
 }
 
-async function sendTelegramDocument(env, chatId, documentUrl, caption) {
+async function sendTelegramDocument(env, chatId, documentUrl, caption, options = {}) {
   const token = env.TELEGRAM_BOT_TOKEN;
   const documentResponse = await fetch(documentUrl);
   if (!documentResponse.ok) {
@@ -121,6 +122,7 @@ async function sendTelegramDocument(env, chatId, documentUrl, caption) {
   const form = new FormData();
   form.append("chat_id", String(chatId));
   form.append("caption", String(caption || "").slice(0, 1024));
+  if (options.reply_markup) form.append("reply_markup", JSON.stringify(options.reply_markup));
   form.append("document", await documentResponse.blob(), `infographic.${extension}`);
 
   const response = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {

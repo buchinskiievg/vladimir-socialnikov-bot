@@ -84,6 +84,11 @@ async function executeDialogueTurn(turn, context) {
   const env = context.env;
   const chatId = context.message.chat.id;
   const fastMemory = context.fastMemory;
+  const rawText = context.message.text || "";
+
+  if (shouldForceImageRevision(rawText, fastMemory)) {
+    return await handleImageRevision(rawText, { ...context, fastMemory, chatId });
+  }
 
   if (turn.intent === "create_drafts") {
     const topic = cleanupFallbackTopic(turn.topic || "");
@@ -296,12 +301,14 @@ async function handleImageRevision(text, context) {
   }
 
   const updated = [];
+  const failures = [];
   for (const id of targetIds) {
     const result = await regenerateDraftImage(id, text, { env });
     if (result.ok && result.draft) updated.push(result.draft);
+    if (!result.ok) failures.push(result.message || `Post ${id}: image update failed.`);
   }
 
-  if (!updated.length) return "\u041d\u0435 \u0441\u043c\u043e\u0433 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0434\u043b\u044f \u043f\u043e\u0441\u0442\u0430 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443.";
+  if (!updated.length) return failures.join("\n") || "\u041d\u0435 \u0441\u043c\u043e\u0433 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0434\u043b\u044f \u043f\u043e\u0441\u0442\u0430 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443.";
   await rememberDrafts(env, fastMemory, context.chatId, updated);
   return formatImageUpdates(updated);
 }
@@ -480,6 +487,34 @@ function looksLikeImageRevision(text) {
     "picture",
     "visual",
     "infographic"
+  ]);
+}
+
+function shouldForceImageRevision(text, fastMemory) {
+  const lower = String(text || "").toLowerCase();
+  const hasRecentDraft = Boolean(readSummary(fastMemory).recentDraftIds?.length);
+  if (!hasRecentDraft) return false;
+  if (looksLikeImageRevision(text) && hasAny(lower, [
+    "\u043f\u0435\u0440\u0435\u0434\u0435\u043b",
+    "\u0437\u0430\u043c\u0435\u043d",
+    "\u0438\u0437\u043c\u0435\u043d",
+    "\u043d\u0435 \u0442\u043e\u0447",
+    "\u043d\u0435\u0442\u043e\u0447",
+    "\u043d\u0435 \u043f\u043e\u0434\u0445",
+    "\u0434\u0440\u0443\u0433",
+    "\u043d\u043e\u0432",
+    "replace",
+    "change",
+    "different",
+    "regenerate"
+  ])) return true;
+  return hasAny(lower, [
+    "\u0442\u0430\u043a\u0443\u044e \u0436\u0435",
+    "\u0442\u0430 \u0436\u0435",
+    "\u043e\u0434\u0438\u043d\u0430\u043a\u043e\u0432",
+    "\u043d\u0435 \u0438\u0437\u043c\u0435\u043d\u0438\u043b",
+    "same image",
+    "same picture"
   ]);
 }
 

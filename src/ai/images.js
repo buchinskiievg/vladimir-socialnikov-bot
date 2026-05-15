@@ -21,7 +21,8 @@ export async function generateInfographicForPost({ id, topic, text, target, imag
   }
 
   const extension = image.mimeType === "image/jpeg" ? "jpg" : image.mimeType === "image/svg+xml" ? "svg" : "png";
-  const key = `generated-post-images/${new Date().toISOString().slice(0, 10)}/${id}.${extension}`;
+  const revisionSuffix = imageInstruction ? `-${Date.now()}` : "";
+  const key = `generated-post-images/${new Date().toISOString().slice(0, 10)}/${id}${revisionSuffix}.${extension}`;
   await env.MESSAGE_ARCHIVE.put(key, image.bytes, {
     httpMetadata: { contentType: image.mimeType || "image/png" },
     customMetadata: {
@@ -36,6 +37,29 @@ export async function generateInfographicForPost({ id, topic, text, target, imag
     imageKey: key,
     imageUrl: `${String(env.PUBLIC_WORKER_URL).replace(/\/$/, "")}/media/${encodeURIComponent(key)}`,
     imagePrompt: prompt
+  };
+}
+
+export async function generateFallbackInfographicForPost({ id, topic, target, imageInstruction }, env, reason = "Fallback SVG infographic") {
+  if (!env.MESSAGE_ARCHIVE || !env.PUBLIC_WORKER_URL) return null;
+  const spec = imageSpecForTarget(target);
+  const image = generateFallbackSvg({ topic, target, spec });
+  const extension = "svg";
+  const revisionSuffix = imageInstruction ? `-${Date.now()}` : "";
+  const key = `generated-post-images/${new Date().toISOString().slice(0, 10)}/${id}${revisionSuffix}.${extension}`;
+  await env.MESSAGE_ARCHIVE.put(key, image.bytes, {
+    httpMetadata: { contentType: image.mimeType },
+    customMetadata: {
+      topic: String(topic || "").slice(0, 256),
+      target: String(target || "all").slice(0, 64),
+      width: String(spec.width),
+      height: String(spec.height)
+    }
+  });
+  return {
+    imageKey: key,
+    imageUrl: `${String(env.PUBLIC_WORKER_URL).replace(/\/$/, "")}/media/${encodeURIComponent(key)}`,
+    imagePrompt: reason
   };
 }
 
@@ -87,6 +111,8 @@ function buildInfographicPrompt({ topic, text, target, spec, imageInstruction })
     "Layout: use a large central technical diagram occupying at least 70% of the canvas, with 3-5 polished callout blocks around it. Make it visually striking at Telegram preview size.",
     "Composition: make substation/grid/single-line/software/equipment elements prominent, full-frame, balanced edge to edge, and technically plausible.",
     `Visual concept to emphasize: ${concept}.`,
+    imageInstruction ? "This is a regeneration request. Create a materially different image from the previous one: different composition, different central diagram, different equipment arrangement, and visibly different color balance. Do not return a near-duplicate." : "",
+    imageInstruction ? "For technical-accuracy complaints, prioritize a plausible engineering single-line/grid integration diagram over decorative generic energy imagery." : "",
     "Engineering accuracy: use recognizable power-system symbols where useful: busbars, breakers, transformers, CT/VT, protection relays, transmission towers, GIS bays, HVDC converter blocks, load-flow arrows, voltage labels such as 330 kV, 500 kV, 750 kV only when relevant.",
     "Text in image: English only. Use very little text, maximum 5 short labels, large and legible. No long paragraphs.",
     "Do not include fake standards numbers, fake company logos, watermarks, signatures, QR codes, or contact details.",

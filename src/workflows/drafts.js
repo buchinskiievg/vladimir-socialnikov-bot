@@ -134,7 +134,9 @@ export async function approveDraft(id, context) {
     imageUrl: draft.imageUrl || ""
   }, context.env);
   const dryRun = isDryRun(context.env) && publishResult.dryRun;
-  await updateDraftStatus(context.env, id, publishResult.ok ? (dryRun ? "approved_dry_run" : "published") : "publish_failed");
+  if (publishResult.ok) {
+    await updateDraftStatus(context.env, id, dryRun ? "approved_dry_run" : "published");
+  }
   if (publishResult.ok && !dryRun) {
     if (draft.source && draft.source !== "telegram") await markMaterialFindingUsed(context.env, draft.source);
     await rememberPublishedPost(context.env, {
@@ -149,7 +151,7 @@ export async function approveDraft(id, context) {
   }
 
   const lines = [
-    `Post ${id}: ${publishResult.ok ? (dryRun ? "approved in dry run; not published" : "published") : "publish failed"}`,
+    `Post ${id}: ${publishResult.ok ? (dryRun ? "approved in dry run; not published" : "published") : "publish failed; still waiting for approval"}`,
     `Target: ${draft.target || "all"}`
   ];
   for (const item of publishResult.results) {
@@ -196,9 +198,17 @@ async function generateDraftImage({ id, topic, text, target, imageInstruction },
     const { generateInfographicForPost } = await import("../ai/images.js");
     return await generateInfographicForPost({ id, topic, text, target, imageInstruction }, env) || {};
   } catch (error) {
-    return {
-      imagePrompt: `Image generation failed: ${error.message}`
-    };
+    console.log(JSON.stringify({ ok: false, job: "generate-draft-image", id, error: error.message }));
+    try {
+      const { generateFallbackInfographicForPost } = await import("../ai/images.js");
+      return await generateFallbackInfographicForPost({ id, topic, target, imageInstruction }, env, `Fallback after image generation failed: ${error.message}`) || {
+        imagePrompt: `Image generation failed: ${error.message}`
+      };
+    } catch (fallbackError) {
+      return {
+        imagePrompt: `Image generation failed: ${error.message}; fallback failed: ${fallbackError.message}`
+      };
+    }
   }
 }
 
