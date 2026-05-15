@@ -2,7 +2,7 @@ import { generateClarifyingQuestion, generateDialogueReply, parseDialogueTurn } 
 import { cleanupPendingDrafts, createDraftFromTopic, ensureDraftSourceLine, listPendingDrafts, regenerateDraftImage, reviseDraft } from "./workflows/drafts.js";
 import { buildRedditDiscoveryMessages, discoverRedditCommunities } from "./workflows/reddit-discovery.js";
 import { sendTelegramMessage } from "./telegram-api.js";
-import { readBestMaterialFinding } from "./storage/material-findings.js";
+import { readTopMaterialFindings } from "./storage/material-findings.js";
 import {
   appendChatMessage,
   archiveMessageToSlowMemory,
@@ -70,6 +70,9 @@ function fallbackDialogueTurn(message, fastMemory) {
   if (fastMemory?.pendingIntent === "create_drafts") {
     return { intent: "provide_topic", topic: text, targets: fastMemory.pendingTargets || ["all"] };
   }
+  if (fastMemory?.pendingIntent === "select_material_for_draft") {
+    return { intent: "select_material_for_draft", topic: text, targets: fastMemory.pendingTargets || ["all"] };
+  }
   if (startsNewDraftRequest(text) || mentionsPlatform(text)) {
     return {
       intent: "create_drafts",
@@ -88,6 +91,10 @@ async function executeDialogueTurn(turn, context) {
 
   if (shouldForceImageRevision(rawText, fastMemory)) {
     return await handleImageRevision(rawText, { ...context, fastMemory, chatId });
+  }
+
+  if (fastMemory.pendingIntent === "select_material_for_draft") {
+    return await handleMaterialSelection(rawText, { ...context, fastMemory, chatId });
   }
 
   if (turn.intent === "create_drafts") {
@@ -133,6 +140,10 @@ async function executeDialogueTurn(turn, context) {
     }
     await rememberDrafts(env, fastMemory, chatId, drafts);
     return formatDrafts(drafts);
+  }
+
+  if (turn.intent === "select_material_for_draft" && fastMemory.pendingIntent === "select_material_for_draft") {
+    return await handleMaterialSelection(context.message.text || "", { ...context, fastMemory, chatId });
   }
 
   if (turn.intent === "auto_select_topic") {
@@ -315,37 +326,85 @@ async function handleImageRevision(text, context) {
 
 async function handleAutoSelectedTopic(context) {
   if (context.ctx && !context.runInlineAutoSelect) {
-    context.ctx.waitUntil(runAutoSelectedTopicAndNotify(context));
-    return "\u041f\u0440\u0438\u043d\u044f\u043b. \u0418\u0449\u0443 \u0441\u0432\u0435\u0436\u0438\u0439 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b \u0438\u0437 \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433\u0430, \u043f\u043e\u0442\u043e\u043c \u043f\u0440\u0438\u0448\u043b\u044e \u0433\u043e\u0442\u043e\u0432\u044b\u0439 \u043f\u043e\u0441\u0442 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443.";
+    context.ctx.waitUntil(runMaterialSelectionAndNotify(context));
+    return "\u041f\u0440\u0438\u043d\u044f\u043b. \u0418\u0449\u0443 \u0441\u0432\u0435\u0436\u0438\u0435 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b \u0438 \u043f\u0440\u0438\u0448\u043b\u044e 5 \u043b\u0443\u0447\u0448\u0438\u0445 \u0441\u0441\u044b\u043b\u043e\u043a \u043f\u043e \u0431\u0430\u043b\u043b\u0430\u043c. \u041f\u043e\u0442\u043e\u043c \u043f\u0440\u043e\u0441\u0442\u043e \u043d\u0430\u043f\u0438\u0448\u0438 \u043d\u043e\u043c\u0435\u0440: 1, 2, 3, 4 \u0438\u043b\u0438 5.";
   }
 
   const env = context.env;
-  const fastMemory = context.fastMemory;
-  const pending = await listPendingDrafts(env);
-  const sourceCandidate = pending.find((draft) => draft.source && draft.source !== "telegram");
-  if (sourceCandidate?.topic) {
-    const targets = normalizeTargets(fastMemory.pendingTargets?.length ? fastMemory.pendingTargets : [sourceCandidate.target || "all"]);
-    const drafts = [];
-    for (const target of targets) {
-      drafts.push(await createDraftFromTopic(sourceCandidate.topic, {
-        ...context,
-        target,
-        finding: {
-          title: sourceCandidate.topic,
-          excerpt: sourceCandidate.text,
-          url: sourceCandidate.source
-        }
-      }));
-    }
-    await rememberDrafts(env, fastMemory, context.message.chat.id, drafts);
-    return formatDrafts(drafts);
-  }
-
-  const monitoringResult = await runMonitoringForAutoPost(env);
-  const bestFinding = await readBestMaterialFinding(env, { sinceIso: daysAgoIso(14) });
-  if (bestFinding?.url) return await createDraftsFromBestFinding(bestFinding, context, fastMemory);
+  await runMonitoringForAutoPost(env);
+  const findings = await readTopMaterialFindings(env, { sinceIso: daysAgoIso(14), limit: 5 });
+  if (findings.length) return await rememberAndFormatMaterialChoices(findings, context, context.fastMemory);
 
   return "\u041d\u0435 \u043d\u0430\u0448\u0435\u043b \u0441\u0432\u0435\u0436\u0438\u0439 \u0441\u0438\u043b\u044c\u043d\u044b\u0439 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b \u0438\u0437 \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433\u0430 \u0441 URL-\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u043e\u043c. \u041c\u043e\u0436\u0435\u0448\u044c \u0434\u0430\u0442\u044c \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u0443\u044e \u0441\u0441\u044b\u043b\u043a\u0443 \u0438\u043b\u0438 \u0442\u0435\u043c\u0443.";
+}
+
+async function handleMaterialSelection(text, context) {
+  const summary = readSummary(context.fastMemory);
+  const choices = Array.isArray(summary.materialChoices) ? summary.materialChoices : [];
+  const number = Number(String(text || "").trim().match(/^\d+/)?.[0] || 0);
+  const selected = number >= 1 && number <= choices.length ? choices[number - 1] : null;
+
+  if (selected?.url) {
+    return await createDraftsFromBestFinding(selected, context, context.fastMemory);
+  }
+
+  const topic = cleanupFallbackTopic(text);
+  if (!topic) return "\u041d\u0430\u043f\u0438\u0448\u0438 \u043d\u043e\u043c\u0435\u0440 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u0430: 1, 2, 3, 4 \u0438\u043b\u0438 5. \u0418\u043b\u0438 \u0434\u0430\u0439 \u0441\u0432\u043e\u044e \u0442\u0435\u043c\u0443 \u0442\u0435\u043a\u0441\u0442\u043e\u043c.";
+
+  const targets = overrideTargetsFromText(context.message.text, normalizeTargets(context.fastMemory.pendingTargets));
+  const drafts = [];
+  for (const target of targets) {
+    drafts.push(await createDraftFromTopic(topic, { ...context, target }));
+  }
+  await rememberDrafts(context.env, context.fastMemory, context.chatId, drafts);
+  return formatDrafts(drafts);
+}
+
+async function rememberAndFormatMaterialChoices(findings, context, fastMemory) {
+  const targets = normalizeTargets(fastMemory.pendingTargets?.length ? fastMemory.pendingTargets : ["linkedin_personal"]);
+  const choices = findings.map((finding) => ({
+    title: finding.title,
+    excerpt: finding.excerpt,
+    url: finding.url,
+    topic: finding.topic,
+    score: finding.score,
+    scoring: finding.scoring,
+    publishedAt: finding.publishedAt,
+    sourceName: finding.sourceName,
+    sourceType: finding.sourceType,
+    lastSeenAt: finding.lastSeenAt
+  }));
+  const existingSummary = readSummary(fastMemory);
+  await writeFastMemory(context.env, {
+    ...fastMemory,
+    chatId: context.message.chat.id,
+    updatedAt: new Date().toISOString(),
+    pendingIntent: "select_material_for_draft",
+    pendingTargets: targets,
+    pendingTopicHint: "",
+    summary: JSON.stringify({
+      ...existingSummary,
+      materialChoices: choices,
+      materialChoicesCreatedAt: new Date().toISOString()
+    })
+  });
+  return formatMaterialChoices(choices);
+}
+
+function formatMaterialChoices(findings) {
+  const lines = [
+    "\u0412\u043e\u0442 5 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432 \u0441 \u043b\u0443\u0447\u0448\u0438\u043c\u0438 \u0431\u0430\u043b\u043b\u0430\u043c\u0438. \u041d\u0430\u043f\u0438\u0448\u0438 \u043d\u043e\u043c\u0435\u0440, \u043f\u043e \u043a\u0430\u043a\u043e\u043c\u0443 \u0434\u0435\u043b\u0430\u0442\u044c \u043f\u043e\u0441\u0442:",
+    ""
+  ];
+  findings.forEach((finding, index) => {
+    lines.push(`${index + 1} - ${finding.title}`);
+    lines.push(`Score: ${Math.round(Number(finding.score || 0))}`);
+    if (finding.sourceName) lines.push(`Source: ${finding.sourceName}`);
+    lines.push(finding.url);
+    lines.push("");
+  });
+  lines.push("\u0418\u043b\u0438 \u043d\u0430\u043f\u0438\u0448\u0438 \u0441\u0432\u043e\u044e \u0442\u0435\u043c\u0443 \u0442\u0435\u043a\u0441\u0442\u043e\u043c.");
+  return lines.join("\n").trim();
 }
 
 async function createDraftsFromBestFinding(bestFinding, context, fastMemory) {
@@ -392,6 +451,20 @@ async function runAutoSelectedTopicAndNotify(context) {
       context.env,
       context.message.chat.id,
       `\u041d\u0435 \u0441\u043c\u043e\u0433 \u0434\u043e\u0432\u0435\u0441\u0442\u0438 \u0430\u0432\u0442\u043e\u043f\u043e\u0434\u0431\u043e\u0440 \u0434\u043e \u043a\u043e\u043d\u0446\u0430: ${error.message}`
+    );
+  }
+}
+
+async function runMaterialSelectionAndNotify(context) {
+  try {
+    const result = await handleAutoSelectedTopic({ ...context, runInlineAutoSelect: true, ctx: null });
+    await sendTelegramMessage(context.env, context.message.chat.id, result.text || result, result.options || {});
+  } catch (error) {
+    console.log(JSON.stringify({ ok: false, job: "material-selection-notify", error: error.message }));
+    await sendTelegramMessage(
+      context.env,
+      context.message.chat.id,
+      `\u041d\u0435 \u0441\u043c\u043e\u0433 \u043f\u043e\u0434\u043e\u0431\u0440\u0430\u0442\u044c 5 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432: ${error.message}`
     );
   }
 }

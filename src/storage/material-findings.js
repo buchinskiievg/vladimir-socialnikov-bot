@@ -53,6 +53,27 @@ export async function readBestMaterialFinding(env, { sinceIso = "", includeUsed 
   return row ? fromRow(row) : null;
 }
 
+export async function readTopMaterialFindings(env, { sinceIso = "", includeUsed = false, limit = 5 } = {}) {
+  const count = Math.max(1, Math.min(10, Number(limit || 5)));
+  if (!env.DB) {
+    return [...memoryFindings.values()]
+      .filter((row) => (includeUsed || row.status !== "used") && (!sinceIso || row.lastSeenAt >= sinceIso))
+      .sort((a, b) => b.score - a.score || String(b.lastSeenAt).localeCompare(String(a.lastSeenAt)))
+      .slice(0, count);
+  }
+
+  const { results } = await env.DB.prepare(
+    `select * from material_findings
+     where url like 'http%' and (? = '' or last_seen_at >= ?) and (? = 1 or status != 'used')
+     order by score desc, last_seen_at desc
+     limit ?`
+  )
+    .bind(sinceIso, sinceIso, includeUsed ? 1 : 0, count)
+    .all();
+
+  return (results || []).map(fromRow);
+}
+
 export async function markMaterialFindingUsed(env, url) {
   if (!url) return;
   if (!env.DB) {
