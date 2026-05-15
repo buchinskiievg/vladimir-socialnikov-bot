@@ -1,5 +1,5 @@
 import { publishToSocials } from "./social/index.js";
-import { approveDraft, cleanupPendingDrafts, createDraftFromTopic, listPendingDrafts, rejectDraft } from "./workflows/drafts.js";
+import { approveDraft, cleanupPendingDrafts, createDraftFromTopic, ensureDraftSourceLine, listPendingDrafts, rejectDraft, sourceUrlFromDraft } from "./workflows/drafts.js";
 import { addSource, listSources } from "./storage/sources.js";
 import { seedGoogleNewsSources } from "./monitoring/google-news.js";
 import { listLeadsByStatus } from "./storage/leads.js";
@@ -216,7 +216,7 @@ function formatPublishResult(result) {
 
 function formatDraft(draft) {
   return {
-    text: `${formatApprovalHeader(draft)}\n\n${draft.text}`,
+    text: `${formatApprovalHeader(draft)}\n\n${ensureDraftSourceLine(draft.text, draft)}`,
     options: {
       photoUrl: draft.imageUrl || undefined,
       reply_markup: {
@@ -236,11 +236,14 @@ function draftButtons(id) {
 }
 
 function formatApprovalHeader(draft) {
-  return [
+  const lines = [
     "FOR APPROVAL",
     `Channel: ${formatTargetLabel(draft.target)}`,
     `Account: ${formatAccountLabel(draft.target)}`
-  ].join("\n");
+  ];
+  const sourceUrl = sourceUrlFromDraft(draft);
+  if (sourceUrl) lines.push(`Source: ${sourceUrl}`);
+  return lines.join("\n");
 }
 
 function formatTargetLabel(target) {

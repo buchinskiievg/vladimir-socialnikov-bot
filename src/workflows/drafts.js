@@ -16,7 +16,10 @@ export async function createDraftFromTopic(topic, context) {
   const id = crypto.randomUUID().slice(0, 8);
   const target = context.target || "all";
   await supersedePendingDraftsForTarget(context.env, { topic, target });
-  const text = await generateDraftText(topic, context.env, context.finding || null, target);
+  const text = ensureTextSourceLine(
+    await generateDraftText(topic, context.env, context.finding || null, target),
+    context.finding?.url || ""
+  );
   const draft = {
     id,
     topic,
@@ -79,7 +82,7 @@ export async function regenerateDraftImage(id, instruction, context) {
   const image = await generateDraftImage({
     id: draft.id,
     topic: draft.topic,
-    text: draft.text,
+    text: ensureDraftSourceLine(draft.text, draft),
     target: draft.target || "all",
     imageInstruction: instruction
   }, context.env);
@@ -166,7 +169,7 @@ export async function createDraftFromFinding(finding, env) {
   const id = crypto.randomUUID().slice(0, 8);
   const target = finding.target || "all";
   await supersedePendingDraftsForTarget(env, { topic, target });
-  const text = await generateDraftText(topic, env, finding, target);
+  const text = ensureTextSourceLine(await generateDraftText(topic, env, finding, target), finding.url || "");
   const draft = {
     id,
     topic,
@@ -236,15 +239,19 @@ async function reviseDraftText(draft, instruction, env) {
   ].join("\n");
 }
 
-function ensureDraftSourceLine(text, draft) {
+export function ensureDraftSourceLine(text, draft) {
   const sourceUrl = sourceUrlFromDraft(draft);
   if (!sourceUrl) return text;
+  return ensureTextSourceLine(text, sourceUrl);
+}
+
+function ensureTextSourceLine(text, sourceUrl) {
   const clean = String(text || "").trim();
   if (clean.includes(sourceUrl)) return clean;
   return `${clean}\n\nSource: ${sourceUrl}`;
 }
 
-function sourceUrlFromDraft(draft) {
+export function sourceUrlFromDraft(draft) {
   const source = String(draft?.source || "").trim();
   if (/^https?:\/\//i.test(source)) return source;
   return "";

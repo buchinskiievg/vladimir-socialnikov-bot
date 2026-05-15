@@ -1,5 +1,5 @@
 import { generateClarifyingQuestion, generateDialogueReply, parseDialogueTurn } from "./ai/gemini.js";
-import { cleanupPendingDrafts, createDraftFromTopic, listPendingDrafts, regenerateDraftImage, reviseDraft } from "./workflows/drafts.js";
+import { cleanupPendingDrafts, createDraftFromTopic, ensureDraftSourceLine, listPendingDrafts, regenerateDraftImage, reviseDraft, sourceUrlFromDraft } from "./workflows/drafts.js";
 import { buildRedditDiscoveryMessages, discoverRedditCommunities } from "./workflows/reddit-discovery.js";
 import {
   appendChatMessage,
@@ -62,6 +62,7 @@ function fallbackDialogueTurn(message, fastMemory) {
   if (hasAny(lower, ["\u043f\u0440\u043e\u0432\u0435\u0440\u043a", "pending"])) return { intent: "pending" };
   if (looksLikeCleanupRequest(text)) return { intent: "cleanup_pending" };
   if (looksLikeRedditDiscovery(text)) return { intent: "find_reddit_communities", topic: cleanupFallbackTopic(text) };
+  if (looksLikeMonitoringArticleRequest(text)) return { intent: "auto_select_topic" };
   if (fastMemory?.pendingIntent === "create_drafts") {
     return { intent: "provide_topic", topic: text, targets: fastMemory.pendingTargets || ["all"] };
   }
@@ -469,6 +470,12 @@ function looksLikeCleanupRequest(text) {
     && hasAny(lower, ["\u043d\u0435\u0430\u043a\u0442\u0443\u0430\u043b", "\u0441\u0442\u0430\u0440", "pending", "\u043e\u0447\u0435\u0440\u0435\u0434", "\u043f\u043e\u0441\u0442", "\u043f\u0443\u0431\u043b\u0438\u043a"]);
 }
 
+function looksLikeMonitoringArticleRequest(text) {
+  const lower = String(text || "").toLowerCase();
+  return hasAny(lower, ["\u0441\u0430\u043c\u043e\u0439 \u0441\u0438\u043b\u044c\u043d", "\u0441\u0430\u043c\u043e\u0439 \u043f\u043e\u043f\u0443\u043b", "\u043e\u0442\u043e\u0431\u0440\u0430\u043d", "\u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433", "\u043d\u0430\u0439\u0434\u0435\u043d\u043d", "strongest", "popular", "selected", "monitoring"])
+    && hasAny(lower, ["\u0441\u0442\u0430\u0442", "\u043d\u043e\u0432\u043e\u0441", "\u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b", "article", "news", "material"]);
+}
+
 function inferTargets(text) {
   const lower = String(text || "").toLowerCase();
   const targets = [];
@@ -506,7 +513,7 @@ function overrideTargetsFromText(text, targets) {
 function formatDrafts(drafts, { includePhoto = true } = {}) {
   return {
     messages: drafts.map((draft) => ({
-      text: `${formatApprovalHeader(draft)}\n\n${draft.text}`,
+      text: `${formatApprovalHeader(draft)}\n\n${ensureDraftSourceLine(draft.text, draft)}`,
       options: {
         photoUrl: includePhoto ? draft.imageUrl || undefined : undefined,
         reply_markup: {
@@ -536,11 +543,14 @@ function formatImageUpdates(drafts) {
 }
 
 function formatApprovalHeader(draft) {
-  return [
+  const lines = [
     "FOR APPROVAL",
     `Channel: ${formatTargetLabel(draft.target)}`,
     `Account: ${formatAccountLabel(draft.target)}`
-  ].join("\n");
+  ];
+  const sourceUrl = sourceUrlFromDraft(draft);
+  if (sourceUrl) lines.push(`Source: ${sourceUrl}`);
+  return lines.join("\n");
 }
 
 function formatTargetLabel(target) {
