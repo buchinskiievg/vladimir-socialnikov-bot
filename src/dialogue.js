@@ -93,6 +93,10 @@ async function executeDialogueTurn(turn, context) {
     return await handleImageRevision(rawText, { ...context, fastMemory, chatId });
   }
 
+  if (shouldForceCurrentPostTextRevision(rawText, fastMemory)) {
+    return await handleTextRevision(rawText, { ...context, fastMemory, chatId });
+  }
+
   if (fastMemory.pendingIntent === "select_material_for_draft" && looksLikeNumberChoice(rawText)) {
     return await handleMaterialSelection(rawText, { ...context, fastMemory, chatId });
   }
@@ -603,6 +607,31 @@ function shouldForceImageRevision(text, fastMemory) {
     "\u043d\u0435 \u0438\u0437\u043c\u0435\u043d\u0438\u043b",
     "same image",
     "same picture"
+  ]);
+}
+
+function shouldForceCurrentPostTextRevision(text, fastMemory) {
+  const lower = String(text || "").toLowerCase();
+  const hasRecentDraft = Boolean(readSummary(fastMemory).recentDraftIds?.length);
+  if (!hasRecentDraft) return false;
+  if (looksLikeImageRevision(text)) return false;
+  return hasAny(lower, [
+    "подправь в посте",
+    "исправь в посте",
+    "исправь текущ",
+    "улучши этот текст",
+    "перепиши этот пост",
+    "перепиши текст",
+    "добавь источник",
+    "добавь ссылк",
+    "сделай текст",
+    "сократи",
+    "расширь",
+    "rewrite this post",
+    "revise this post",
+    "fix this post",
+    "improve this text",
+    "add source"
   ]);
 }
 
