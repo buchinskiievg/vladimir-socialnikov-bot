@@ -84,6 +84,17 @@ async function executeDialogueTurn(turn, context) {
   if (turn.intent === "create_drafts") {
     const topic = cleanupFallbackTopic(turn.topic || "");
     const targets = overrideTargetsFromText(context.message.text, normalizeTargets(turn.targets));
+    if (looksLikeGenericPostRequest(context.message.text, topic)) {
+      await writeFastMemory(env, {
+        ...fastMemory,
+        chatId,
+        updatedAt: new Date().toISOString(),
+        pendingIntent: "",
+        pendingTargets: targets,
+        pendingTopicHint: ""
+      });
+      return await handleAutoSelectedTopic({ ...context, fastMemory: { ...fastMemory, pendingTargets: targets } });
+    }
     if (!topic) {
       await writeFastMemory(env, {
         ...fastMemory,
@@ -280,26 +291,41 @@ async function handleAutoSelectedTopic(context) {
   const env = context.env;
   const fastMemory = context.fastMemory;
   const pending = await listPendingDrafts(env);
-  const candidate = pending.find((draft) => draft.source && draft.source !== "telegram") || pending[0];
-  if (!candidate?.topic) {
-    return "\u041f\u043e\u043a\u0430 \u043d\u0435 \u0432\u0438\u0436\u0443 \u0441\u0438\u043b\u044c\u043d\u044b\u0445 \u0442\u0435\u043c \u0438\u0437 \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433\u0430. \u041c\u043e\u0433\u0443 \u0441\u0434\u0435\u043b\u0430\u0442\u044c \u043f\u043e\u0441\u0442 \u043d\u0430 \u0442\u0432\u043e\u044e \u0442\u0435\u043c\u0443.";
+  const sourceCandidate = pending.find((draft) => draft.source && draft.source !== "telegram");
+  if (sourceCandidate?.topic) {
+    const targets = normalizeTargets(fastMemory.pendingTargets?.length ? fastMemory.pendingTargets : [sourceCandidate.target || "all"]);
+    const drafts = [];
+    for (const target of targets) {
+      drafts.push(await createDraftFromTopic(sourceCandidate.topic, {
+        ...context,
+        target,
+        finding: {
+          title: sourceCandidate.topic,
+          excerpt: sourceCandidate.text,
+          url: sourceCandidate.source
+        }
+      }));
+    }
+    await rememberDrafts(env, fastMemory, context.message.chat.id, drafts);
+    return formatDrafts(drafts);
   }
 
-  const targets = normalizeTargets(fastMemory.pendingTargets?.length ? fastMemory.pendingTargets : [candidate.target || "all"]);
-  const drafts = [];
-  for (const target of targets) {
-    drafts.push(await createDraftFromTopic(candidate.topic, {
-      ...context,
-      target,
-      finding: {
-        title: candidate.topic,
-        excerpt: candidate.text,
-        url: candidate.source && candidate.source !== "telegram" ? candidate.source : ""
-      }
-    }));
+  const monitoringResult = await runMonitoringForAutoPost(env);
+  if (monitoringResult.drafts?.length) {
+    await rememberDrafts(env, fastMemory, context.message.chat.id, monitoringResult.drafts);
+    return formatDrafts(monitoringResult.drafts);
   }
-  await rememberDrafts(env, fastMemory, context.message.chat.id, drafts);
-  return formatDrafts(drafts);
+
+  return "\u041d\u0435 \u043d\u0430\u0448\u0435\u043b \u0441\u0432\u0435\u0436\u0438\u0439 \u0441\u0438\u043b\u044c\u043d\u044b\u0439 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b \u0438\u0437 \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433\u0430 \u0441 URL-\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u043e\u043c. \u041c\u043e\u0436\u0435\u0448\u044c \u0434\u0430\u0442\u044c \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u0443\u044e \u0441\u0441\u044b\u043b\u043a\u0443 \u0438\u043b\u0438 \u0442\u0435\u043c\u0443.";
+}
+
+async function runMonitoringForAutoPost(env) {
+  const { runMonitoringCycle } = await import("./monitoring/index.js");
+  return runMonitoringCycle(env, {
+    cron: "manual",
+    notify: false,
+    limit: Number(env.AUTO_SELECT_MONITORING_LIMIT || 12)
+  });
 }
 
 async function handleTextRevision(text, context) {
@@ -468,6 +494,31 @@ function looksLikeCleanupRequest(text) {
   const lower = String(text || "").toLowerCase();
   return hasAny(lower, ["\u0443\u0434\u0430\u043b", "\u0443\u0431\u0435\u0440", "\u043e\u0447\u0438\u0441\u0442", "\u0441\u043d\u0438\u043c\u0438", "delete", "remove", "clean"])
     && hasAny(lower, ["\u043d\u0435\u0430\u043a\u0442\u0443\u0430\u043b", "\u0441\u0442\u0430\u0440", "pending", "\u043e\u0447\u0435\u0440\u0435\u0434", "\u043f\u043e\u0441\u0442", "\u043f\u0443\u0431\u043b\u0438\u043a"]);
+}
+
+function looksLikeGenericPostRequest(text, topic) {
+  const lower = String(text || "").toLowerCase();
+  if (!startsNewDraftRequest(text) && !mentionsPlatform(text)) return false;
+  if (hasAny(lower, ["\u043f\u043e \u0442\u0435\u043c\u0435", "\u043d\u0430 \u0442\u0435\u043c\u0443", "\u043f\u0440\u043e ", "about "])) return false;
+  if (looksLikeMonitoringArticleRequest(text)) return true;
+  if (isOnlyPostAndPlatformRequest(lower)) return true;
+  const cleanTopic = String(topic || "").trim().toLowerCase();
+  return !cleanTopic
+    || cleanTopic === "linkedin"
+    || cleanTopic === "\u043b\u0438\u043d\u043a\u0435\u0434\u0438\u043d"
+    || cleanTopic.length < 8;
+}
+
+function isOnlyPostAndPlatformRequest(lower) {
+  const remainder = String(lower || "")
+    .replace(/владимир/g, " ")
+    .replace(/подготовь|сделай|создай|напиши|составь|делай/g, " ")
+    .replace(/пост|публикац(?:ию|ия|ии)?|материал/g, " ")
+    .replace(/для|в|на/g, " ")
+    .replace(/linkedin|linked in|линкедин/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return remainder.length < 4;
 }
 
 function looksLikeMonitoringArticleRequest(text) {

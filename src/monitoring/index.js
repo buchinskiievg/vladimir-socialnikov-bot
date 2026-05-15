@@ -95,7 +95,7 @@ export async function runMonitoringCycle(env, event) {
   }
 
   const demandResult = await createDraftsFromDemand(findings, env);
-  if (demandResult.drafts.length) {
+  if (demandResult.drafts.length && event.notify !== false) {
     await notifyDemandDrafts(env, demandResult);
   }
   if (demandResult.topics.length || demandResult.drafts.length) {
@@ -122,6 +122,7 @@ export async function runMonitoringCycle(env, event) {
     findings: findings.length,
     demandTopics: demandResult.topics.length,
     draftsCreated: demandResult.drafts.length,
+    drafts: demandResult.drafts,
     dryRun: env.SOCIAL_DRY_RUN !== "false",
     livePublishNetworks: env.LIVE_PUBLISH_NETWORKS || ""
   }));
