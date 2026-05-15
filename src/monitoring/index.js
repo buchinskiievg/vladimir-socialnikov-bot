@@ -134,6 +134,7 @@ export async function runMonitoringCycle(env, event) {
     findings: findings.length,
     demandTopics: demandResult.topics.length,
     draftsCreated: demandResult.drafts.length,
+    drafts: demandResult.drafts,
     dryRun: env.SOCIAL_DRY_RUN !== "false",
     livePublishNetworks: env.LIVE_PUBLISH_NETWORKS || ""
   };

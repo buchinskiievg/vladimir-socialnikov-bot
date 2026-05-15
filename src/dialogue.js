@@ -62,7 +62,9 @@ function fallbackDialogueTurn(message, fastMemory) {
   if (hasAny(lower, ["\u043f\u0440\u043e\u0432\u0435\u0440\u043a", "pending"])) return { intent: "pending" };
   if (looksLikeCleanupRequest(text)) return { intent: "cleanup_pending" };
   if (looksLikeRedditDiscovery(text)) return { intent: "find_reddit_communities", topic: cleanupFallbackTopic(text) };
-  if (looksLikeMonitoringArticleRequest(text)) return { intent: "auto_select_topic" };
+  if (looksLikeMonitoringArticleRequest(text) || shouldAutoSelectForDraftRequest(text, "")) {
+    return { intent: "auto_select_topic", targets: inferTargets(text) };
+  }
   if (fastMemory?.pendingIntent === "create_drafts") {
     return { intent: "provide_topic", topic: text, targets: fastMemory.pendingTargets || ["all"] };
   }
@@ -84,7 +86,7 @@ async function executeDialogueTurn(turn, context) {
   if (turn.intent === "create_drafts") {
     const topic = cleanupFallbackTopic(turn.topic || "");
     const targets = overrideTargetsFromText(context.message.text, normalizeTargets(turn.targets));
-    if (looksLikeGenericPostRequest(context.message.text, topic)) {
+    if (shouldAutoSelectForDraftRequest(context.message.text, topic)) {
       await writeFastMemory(env, {
         ...fastMemory,
         chatId,
@@ -127,7 +129,8 @@ async function executeDialogueTurn(turn, context) {
   }
 
   if (turn.intent === "auto_select_topic") {
-    return await handleAutoSelectedTopic(context);
+    const targets = overrideTargetsFromText(context.message.text, normalizeTargets(turn.targets));
+    return await handleAutoSelectedTopic({ ...context, fastMemory: { ...fastMemory, pendingTargets: targets } });
   }
 
   if (turn.intent === "revise_image") {
@@ -507,6 +510,27 @@ function looksLikeGenericPostRequest(text, topic) {
     || cleanTopic === "linkedin"
     || cleanTopic === "\u043b\u0438\u043d\u043a\u0435\u0434\u0438\u043d"
     || cleanTopic.length < 8;
+}
+
+function shouldAutoSelectForDraftRequest(text, topic) {
+  const cleanTopic = String(topic || "").trim();
+  if (looksLikeMonitoringArticleRequest(text)) return true;
+  if (isOnlyPostAndPlatformRequestFixed(String(text || "").toLowerCase())) return true;
+  if (!cleanTopic && (startsNewDraftRequest(text) || mentionsPlatform(text))) return true;
+  return false;
+}
+
+function isOnlyPostAndPlatformRequestFixed(lower) {
+  const remainder = String(lower || "")
+    .replace(/\u0432\u043b\u0430\u0434\u0438\u043c\u0438\u0440/g, " ")
+    .replace(/\u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u044c|\u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u0438\u0442\u044c|\u0441\u0434\u0435\u043b\u0430\u0439|\u0441\u043e\u0437\u0434\u0430\u0439|\u043d\u0430\u043f\u0438\u0448\u0438|\u0441\u043e\u0441\u0442\u0430\u0432\u044c|\u0434\u0435\u043b\u0430\u0439/g, " ")
+    .replace(/\u043f\u043e\u0441\u0442|\u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438[ея]|\u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446(?:\u0438\u044e|\u0438\u044f|\u0438\u0438)?|\u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b/g, " ")
+    .replace(/\u0434\u043b\u044f|\u0432|\u043d\u0430/g, " ")
+    .replace(/linkedin|linked in|\u043b\u0438\u043d\u043a\u0435\u0434\u0438\u043d/g, " ")
+    .replace(/\u0432\u044b\u0431\u0435\u0440\u0438|\u043f\u043e\u0434\u0431\u0435\u0440\u0438|\u0441\u0430\u043c|\u0441\u0430\u043c\u0430|\u0441\u0430\u043c\u043e\u0439|\u0442\u0435\u043c[уы]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return remainder.length < 4;
 }
 
 function isOnlyPostAndPlatformRequest(lower) {
