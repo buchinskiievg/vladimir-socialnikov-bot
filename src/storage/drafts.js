@@ -137,6 +137,7 @@ function fromRow(row) {
     status: row.status,
     source: row.source,
     createdAt: row.created_at,
+    updatedAt: row.updated_at || "",
     target: row.target || "all",
     imageUrl: row.image_url || "",
     imageKey: row.image_key || "",

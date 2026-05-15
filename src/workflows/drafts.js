@@ -41,7 +41,11 @@ export async function createDraftFromTopic(topic, context) {
 }
 
 export async function listPendingDrafts(env) {
-  return listDraftsByStatus(env, "pending");
+  const pending = await listDraftsByStatus(env, "pending");
+  const failed = await listDraftsByStatus(env, "publish_failed");
+  return [...pending, ...failed]
+    .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")))
+    .slice(0, 10);
 }
 
 export async function cleanupPendingDrafts(env) {
