@@ -1,15 +1,18 @@
 export async function generatePostDraft({ topic, finding, target }, env) {
   const model = env.GEMINI_TEXT_MODEL || "gemini-2.5-flash-lite";
+  const sourceBased = Boolean(finding?.url);
   const source = finding
     ? `Title: ${finding.title || ""}\nURL: ${finding.url || ""}\nExcerpt: ${finding.excerpt || ""}`
     : "No external source. User provided the topic directly.";
-  const audience = target === "linkedin_personal"
+  const audience = sourceBased
+    ? "Write as a neutral technical editor summarizing a third-party source for electrical power engineers. Do not write as Evgenii, IECCalc, the article author, or a project participant."
+    : target === "linkedin_personal"
     ? "Write as a personal LinkedIn post from Evgenii Buchinskii, an electrical power engineer. Use a practical first-person professional voice when natural."
     : target === "linkedin_company"
       ? "Write as an IECCalc company page post. Use a product/engineering brand voice and connect the topic to useful engineering calculation workflows when natural."
       : "Write as a professional engineering social post.";
   const seo = seoGuidance(target);
-  const platform = platformGuidance(target);
+  const platform = sourceBased ? sourceRetellingGuidance(target) : platformGuidance(target);
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -25,6 +28,8 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               "Return exactly one ready-to-publish post.",
               "Do not provide options, alternatives, explanations, or markdown headings.",
               "Avoid hype. Do not copy source text. Mention standards only when relevant.",
+              "For source-based posts, your job is to retell the source article in your own words while preserving its meaning and content. You are not the author of the story and not a witness to the project.",
+              "For source-based posts, use neutral third-person editorial voice. Do not use I, my, we, our, from our experience, my practical takeaway, or claims implying personal involvement.",
               "When an external source is provided, ground the post in that source only. Do not invent project details, equipment specifications, companies, dates, locations, or claims that are not present in the source context.",
               "If the source context is thin, write a cautious engineering takeaway from the provided material instead of pretending to know more.",
               "Use the target platform's optimal length and depth. Do not make LinkedIn posts too short.",
@@ -46,7 +51,9 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               source,
               "",
               "Prepare exactly one final platform-optimized post for human approval.",
+              finding?.url ? "Source-based article mode: first explain what the source article says in your own words, then add a short engineering context section. Preserve the article's meaning and do not change its claims." : "",
               finding?.url ? "Grounding rule: every concrete factual claim must be supported by the title, excerpt, source text, or URL context above. You may add general engineering interpretation, but clearly keep it as interpretation/checklist, not as source facts." : "",
+              finding?.url ? "Voice rule: do not write as 'I', 'we', 'our team', IECCalc, Evgenii, the project owner, or the article author. Do not present general commentary as personal experience." : "",
               "Language: English only. Translate the user's topic into natural professional English before writing.",
               "Use the requested platform length and structure.",
               "Start with a standalone engineering insight, tension, or practical problem. Do not repeat the title as the first sentence.",
@@ -81,7 +88,22 @@ export async function generatePostDraft({ topic, finding, target }, env) {
     .trim();
 
   const finalText = text || fallbackDraft(topic, finding, "empty model output", target);
-  return ensureSourceLine(polishPostStart(ensurePlatformLength(finalText, { topic, target }), { topic, target }), finding);
+  const lengthChecked = ensurePlatformLength(finalText, { topic, target, sourceBased });
+  const polished = sourceBased ? sanitizeSourceBasedPost(lengthChecked) : polishPostStart(lengthChecked, { topic, target });
+  return ensureSourceLine(polished, finding);
+}
+
+function sanitizeSourceBasedPost(text) {
+  return String(text || "")
+    .replace(/\bMy practical takeaway\s*:/gi, "Engineering takeaway:")
+    .replace(/\bIn my view\s*,?\s*/gi, "")
+    .replace(/\bFrom my experience\s*,?\s*/gi, "")
+    .replace(/\bFrom our experience\s*,?\s*/gi, "")
+    .replace(/\bOur practical takeaway\s*:/gi, "Engineering takeaway:")
+    .replace(/\bWe should\b/gi, "Engineering teams should")
+    .replace(/\bOur team\b/gi, "Engineering teams")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function ensureSourceLine(text, finding) {
@@ -92,9 +114,10 @@ function ensureSourceLine(text, finding) {
   return `${clean}\n\nSource: ${url}`;
 }
 
-function ensurePlatformLength(text, { topic, target }) {
+function ensurePlatformLength(text, { topic, target, sourceBased = false }) {
   const minimum = minCharsForTarget(target);
   if (!minimum || text.length >= minimum || text.includes("Gemini post generation failed")) return text;
+  if (sourceBased) return text;
 
   const needsLinkedIn = target === "linkedin_company" || target === "linkedin_personal";
   if (!needsLinkedIn) return text;
@@ -237,6 +260,38 @@ function platformGuidance(target) {
     "Optimal length: 1,000-1,600 characters.",
     "Make it useful, technical, and scannable.",
     "Hashtags: 3-5."
+  ].join(" ");
+}
+
+function sourceRetellingGuidance(target) {
+  const base = [
+    "Mode: source article retelling.",
+    "Structure: 1) engaging neutral hook based on the article, 2) what the article reports in your own words, 3) why it matters for electrical engineers, 4) one discussion question, 5) source URL and relevant hashtags.",
+    "Do not write as the author, project participant, Evgenii, or IECCalc.",
+    "Do not turn the article into a generic checklist unless the source itself is thin; even then, label engineering points as context."
+  ];
+
+  if (target === "linkedin_company") {
+    return [
+      ...base,
+      "Platform: LinkedIn company page.",
+      "Length: 1,200-2,000 characters.",
+      "Tone: neutral technical editorial, useful for engineers, not promotional."
+    ].join(" ");
+  }
+
+  if (target === "linkedin_personal") {
+    return [
+      ...base,
+      "Platform: LinkedIn personal profile.",
+      "Length: 1,100-1,800 characters.",
+      "Tone: informed editorial note, not first-person memoir."
+    ].join(" ");
+  }
+
+  return [
+    ...base,
+    "Keep it concise, clear, and faithful to the source."
   ].join(" ");
 }
 
@@ -693,7 +748,11 @@ function fallbackDraft(topic, finding, _reason, target = "all") {
     ].join("\n");
   }
 
-  return polishPostStart(ensurePlatformLength(genericEngineeringPost(cleanTopic, sourceLine, target), { topic: cleanTopic, target }), { topic: cleanTopic, target });
+  const sourceBased = Boolean(finding?.url);
+  const fallback = genericEngineeringPost(cleanTopic, sourceLine, target, sourceBased);
+  return sourceBased
+    ? sanitizeSourceBasedPost(fallback)
+    : polishPostStart(ensurePlatformLength(fallback, { topic: cleanTopic, target }), { topic: cleanTopic, target });
 }
 
 function cleanPostTopic(topic) {
@@ -704,12 +763,14 @@ function cleanPostTopic(topic) {
     .trim();
 }
 
-function genericEngineeringPost(topic, sourceLine, target) {
+function genericEngineeringPost(topic, sourceLine, target, sourceBased = false) {
   const companyVoice = target === "linkedin_company";
   return [
-    openingHookForTopic(topic, target),
+    sourceBased ? `The article points to a practical power engineering issue: ${topic}.` : openingHookForTopic(topic, target),
     "",
-    "Industry news becomes useful only when it is translated into design checks, operating constraints, and project risk. For power engineering teams, the important question is not simply what happened, but what it changes in the electrical system.",
+    sourceBased
+      ? "In simple terms, the source highlights a development that should be read not only as industry news, but as a signal for engineering review. The exact facts should stay tied to the source; the useful next step is to ask what the material changes for design, operation, or risk control."
+      : "Industry news becomes useful only when it is translated into design checks, operating constraints, and project risk. For power engineering teams, the important question is not simply what happened, but what it changes in the electrical system.",
     "",
     "A practical review should usually cover:",
     "",
@@ -721,7 +782,9 @@ function genericEngineeringPost(topic, sourceLine, target) {
     "",
     companyVoice
       ? "For IECCalc-style workflows, this is where structured calculation records and repeatable design checks help convert market signals into engineering decisions."
-      : "My practical takeaway: the best engineering conversations start when we stop treating news as a headline and start asking what must be verified before a project can safely operate.",
+      : sourceBased
+        ? "Engineering takeaway: the best discussion starts with the source material, then moves carefully into what must be verified before a similar project, product, or approach can be trusted in real operation."
+        : "My practical takeaway: the best engineering conversations start when we stop treating news as a headline and start asking what must be verified before a project can safely operate.",
     sourceLine,
     "",
     "Which check would you put first for this topic: grid studies, equipment selection, protection coordination, commissioning, or supply chain risk?",
