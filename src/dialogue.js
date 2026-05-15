@@ -93,7 +93,7 @@ async function executeDialogueTurn(turn, context) {
     return await handleImageRevision(rawText, { ...context, fastMemory, chatId });
   }
 
-  if (shouldForceCurrentPostTextRevision(rawText, fastMemory)) {
+  if (shouldForceCurrentPostTextRevisionClean(rawText, fastMemory) || shouldForceCurrentPostTextRevision(rawText, fastMemory)) {
     return await handleTextRevision(rawText, { ...context, fastMemory, chatId });
   }
 
@@ -251,7 +251,7 @@ async function buildClarifyingReply(context, missing) {
   return REPLY_ASK_TOPIC;
 }
 
-async function rememberDrafts(env, fastMemory, chatId, drafts) {
+async function rememberDrafts(env, fastMemory, chatId, drafts, summaryPatch = {}) {
   const existingSummary = readSummary(fastMemory);
   await writeFastMemory(env, {
     ...fastMemory,
@@ -264,7 +264,8 @@ async function rememberDrafts(env, fastMemory, chatId, drafts) {
       ...existingSummary,
       recentDraftIds: drafts.map((draft) => draft.id),
       recentDraftTargets: drafts.map((draft) => draft.target || "all"),
-      recentDraftTopic: drafts[0]?.topic || ""
+      recentDraftTopic: drafts[0]?.topic || "",
+      ...summaryPatch
     })
   });
 }
@@ -299,7 +300,7 @@ async function handleDraftRevision(text, context) {
     }
 
     if (!updated.length) return "\u041d\u0435 \u0441\u043c\u043e\u0433 \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0434\u043b\u044f \u043f\u043e\u0441\u0442\u0430 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443.";
-    await rememberDrafts(env, fastMemory, context.chatId, updated);
+    await rememberDrafts(env, fastMemory, context.chatId, updated, { lastAction: "image_revision" });
     return formatImageUpdates(updated);
   }
 
@@ -310,7 +311,7 @@ async function handleDraftRevision(text, context) {
   }
 
   if (!updated.length) return "\u041d\u0435 \u0441\u043c\u043e\u0433 \u043d\u0430\u0439\u0442\u0438 \u043f\u043e\u0434\u0445\u043e\u0434\u044f\u0449\u0438\u0439 \u043f\u043e\u0441\u0442 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443 \u0434\u043b\u044f \u043f\u0440\u0430\u0432\u043a\u0438.";
-  await rememberDrafts(env, fastMemory, context.chatId, updated);
+  await rememberDrafts(env, fastMemory, context.chatId, updated, { lastAction: "text_revision" });
   return formatDrafts(updated);
 }
 
@@ -584,8 +585,10 @@ function looksLikeImageRevision(text) {
 
 function shouldForceImageRevision(text, fastMemory) {
   const lower = String(text || "").toLowerCase();
-  const hasRecentDraft = Boolean(readSummary(fastMemory).recentDraftIds?.length);
+  const summary = readSummary(fastMemory);
+  const hasRecentDraft = Boolean(summary.recentDraftIds?.length);
   if (!hasRecentDraft) return false;
+  if (summary.lastAction === "image_revision" && looksLikeShortImageFollowup(lower)) return true;
   if (looksLikeImageRevision(text) && hasAny(lower, [
     "\u043f\u0435\u0440\u0435\u0434\u0435\u043b",
     "\u0437\u0430\u043c\u0435\u043d",
@@ -610,6 +613,21 @@ function shouldForceImageRevision(text, fastMemory) {
   ]);
 }
 
+function looksLikeShortImageFollowup(lower) {
+  return hasAny(lower, [
+    "\u0441\u0434\u0435\u043b\u0430\u0439 \u0435\u0449\u0435 \u043e\u0434\u043d\u0443",
+    "\u0441\u0434\u0435\u043b\u0430\u0439 \u0435\u0449\u0451 \u043e\u0434\u043d\u0443",
+    "\u0435\u0449\u0435 \u043e\u0434\u043d\u0443",
+    "\u0435\u0449\u0451 \u043e\u0434\u043d\u0443",
+    "\u0434\u0440\u0443\u0433\u0443\u044e",
+    "\u043d\u0435 \u0442\u043e",
+    "\u043d\u0435 \u043d\u0440\u0430\u0432",
+    "one more",
+    "another one",
+    "different one"
+  ]);
+}
+
 function shouldForceCurrentPostTextRevision(text, fastMemory) {
   const lower = String(text || "").toLowerCase();
   const hasRecentDraft = Boolean(readSummary(fastMemory).recentDraftIds?.length);
@@ -627,6 +645,31 @@ function shouldForceCurrentPostTextRevision(text, fastMemory) {
     "сделай текст",
     "сократи",
     "расширь",
+    "rewrite this post",
+    "revise this post",
+    "fix this post",
+    "improve this text",
+    "add source"
+  ]);
+}
+
+function shouldForceCurrentPostTextRevisionClean(text, fastMemory) {
+  const lower = String(text || "").toLowerCase();
+  const hasRecentDraft = Boolean(readSummary(fastMemory).recentDraftIds?.length);
+  if (!hasRecentDraft) return false;
+  if (looksLikeImageRevision(text)) return false;
+  return hasAny(lower, [
+    "\u043f\u043e\u0434\u043f\u0440\u0430\u0432\u044c \u0432 \u043f\u043e\u0441\u0442\u0435",
+    "\u0438\u0441\u043f\u0440\u0430\u0432\u044c \u0432 \u043f\u043e\u0441\u0442\u0435",
+    "\u0438\u0441\u043f\u0440\u0430\u0432\u044c \u0442\u0435\u043a\u0443\u0449",
+    "\u0443\u043b\u0443\u0447\u0448\u0438 \u044d\u0442\u043e\u0442 \u0442\u0435\u043a\u0441\u0442",
+    "\u043f\u0435\u0440\u0435\u043f\u0438\u0448\u0438 \u044d\u0442\u043e\u0442 \u043f\u043e\u0441\u0442",
+    "\u043f\u0435\u0440\u0435\u043f\u0438\u0448\u0438 \u0442\u0435\u043a\u0441\u0442",
+    "\u0434\u043e\u0431\u0430\u0432\u044c \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a",
+    "\u0434\u043e\u0431\u0430\u0432\u044c \u0441\u0441\u044b\u043b\u043a",
+    "\u0441\u0434\u0435\u043b\u0430\u0439 \u0442\u0435\u043a\u0441\u0442",
+    "\u0441\u043e\u043a\u0440\u0430\u0442\u0438",
+    "\u0440\u0430\u0441\u0448\u0438\u0440\u044c",
     "rewrite this post",
     "revise this post",
     "fix this post",
