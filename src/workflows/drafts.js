@@ -78,7 +78,7 @@ export async function reviseDraft(id, instruction, context) {
 export async function regenerateDraftImage(id, instruction, context) {
   const draft = await readDraft(context.env, id);
   if (!draft) return { ok: false, message: `Post ${id} not found.` };
-  if (draft.status !== "pending") return { ok: false, message: `Post ${id} is ${draft.status}.` };
+  if (!isDraftAwaitingApproval(draft)) return { ok: false, message: `Post ${id} is ${draft.status}.` };
 
   const image = await generateDraftImage({
     id: draft.id,
@@ -107,7 +107,7 @@ export async function regenerateDraftImage(id, instruction, context) {
 export async function approveDraft(id, context) {
   let draft = await readDraft(context.env, id);
   if (!draft) return { ok: false, message: `Post ${id} not found.` };
-  if (draft.status !== "pending") return { ok: false, message: `Post ${id} is ${draft.status}.` };
+  if (!isDraftAwaitingApproval(draft)) return { ok: false, message: `Post ${id} is ${draft.status}.` };
 
   if (!draft.imageUrl && context.env.GENERATE_POST_IMAGES !== "false") {
     const image = await generateDraftImage({
@@ -275,4 +275,8 @@ function looksLikeSourceRequest(text) {
     || lower.includes("reference")
     || lower.includes("источник")
     || lower.includes("ссылк");
+}
+
+function isDraftAwaitingApproval(draft) {
+  return draft?.status === "pending" || draft?.status === "publish_failed";
 }
