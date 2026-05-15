@@ -26,7 +26,7 @@ export async function handleTelegramWebhook(request, env, ctx) {
     return Response.json({ ok: true });
   }
 
-  ctx.waitUntil(handleTelegramMessageAsync(message, { env, update }));
+  ctx.waitUntil(handleTelegramMessageAsync(message, { env, update, ctx }));
   return Response.json({ ok: true });
 }
 
@@ -65,6 +65,7 @@ async function acknowledgeIncomingMessage(message, context) {
 
 function looksLongRunning(text) {
   const lower = String(text || "").toLowerCase();
+  if (lower.includes("\u0437\u0430\u043c\u0443\u0442\u0438")) return true;
   return [
     "пост",
     "публикац",

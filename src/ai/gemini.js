@@ -34,7 +34,7 @@ export async function generatePostDraft({ topic, finding, target }, env) {
               "If the source context is thin, write a cautious engineering takeaway from the provided material instead of pretending to know more.",
               "Use the target platform's optimal length and depth. Do not make LinkedIn posts too short.",
               "The opening must be a strong human hook, not a news-title restatement.",
-              "Never start with phrases like 'The recent...', 'The development of...', 'The construction of...', 'X represents...', or '<topic>:'."
+              "Never start with phrases like 'The recent...', 'The development of...', 'The construction of...', 'X represents...', 'The article points to...', or '<topic>:'."
             ].join(" ")
           }]
         },
@@ -89,12 +89,12 @@ export async function generatePostDraft({ topic, finding, target }, env) {
 
   const finalText = text || fallbackDraft(topic, finding, "empty model output", target);
   const lengthChecked = ensurePlatformLength(finalText, { topic, target, sourceBased });
-  const polished = sourceBased ? sanitizeSourceBasedPost(lengthChecked) : polishPostStart(lengthChecked, { topic, target });
+  const polished = sourceBased ? sanitizeSourceBasedPost(lengthChecked, { topic, target }) : polishPostStart(lengthChecked, { topic, target });
   return ensureSourceLine(polished, finding);
 }
 
-function sanitizeSourceBasedPost(text) {
-  return String(text || "")
+function sanitizeSourceBasedPost(text, { topic, target } = {}) {
+  let result = String(text || "")
     .replace(/\bMy practical takeaway\s*:/gi, "Engineering takeaway:")
     .replace(/\bIn my view\s*,?\s*/gi, "")
     .replace(/\bFrom my experience\s*,?\s*/gi, "")
@@ -104,6 +104,10 @@ function sanitizeSourceBasedPost(text) {
     .replace(/\bOur team\b/gi, "Engineering teams")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+  if (/^The article points to\b/i.test(result)) {
+    result = `${openingHookForTopic(topic, target)}\n\n${stripFirstParagraph(result)}`;
+  }
+  return result.trim();
 }
 
 function ensureSourceLine(text, finding) {

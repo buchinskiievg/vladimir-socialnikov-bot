@@ -1,6 +1,7 @@
 import { generateClarifyingQuestion, generateDialogueReply, parseDialogueTurn } from "./ai/gemini.js";
 import { cleanupPendingDrafts, createDraftFromTopic, ensureDraftSourceLine, listPendingDrafts, regenerateDraftImage, reviseDraft } from "./workflows/drafts.js";
 import { buildRedditDiscoveryMessages, discoverRedditCommunities } from "./workflows/reddit-discovery.js";
+import { sendTelegramMessage } from "./telegram-api.js";
 import {
   appendChatMessage,
   archiveMessageToSlowMemory,
@@ -291,6 +292,11 @@ async function handleImageRevision(text, context) {
 }
 
 async function handleAutoSelectedTopic(context) {
+  if (context.ctx && !context.runInlineAutoSelect) {
+    context.ctx.waitUntil(runAutoSelectedTopicAndNotify(context));
+    return "\u041f\u0440\u0438\u043d\u044f\u043b. \u0418\u0449\u0443 \u0441\u0432\u0435\u0436\u0438\u0439 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b \u0438\u0437 \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433\u0430, \u043f\u043e\u0442\u043e\u043c \u043f\u0440\u0438\u0448\u043b\u044e \u0433\u043e\u0442\u043e\u0432\u044b\u0439 \u043f\u043e\u0441\u0442 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0443.";
+  }
+
   const env = context.env;
   const fastMemory = context.fastMemory;
   const pending = await listPendingDrafts(env);
@@ -322,12 +328,32 @@ async function handleAutoSelectedTopic(context) {
   return "\u041d\u0435 \u043d\u0430\u0448\u0435\u043b \u0441\u0432\u0435\u0436\u0438\u0439 \u0441\u0438\u043b\u044c\u043d\u044b\u0439 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b \u0438\u0437 \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433\u0430 \u0441 URL-\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u043e\u043c. \u041c\u043e\u0436\u0435\u0448\u044c \u0434\u0430\u0442\u044c \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u0443\u044e \u0441\u0441\u044b\u043b\u043a\u0443 \u0438\u043b\u0438 \u0442\u0435\u043c\u0443.";
 }
 
+async function runAutoSelectedTopicAndNotify(context) {
+  try {
+    const result = await handleAutoSelectedTopic({ ...context, runInlineAutoSelect: true, ctx: null });
+    const messages = Array.isArray(result?.messages) ? result.messages : [result];
+    for (const item of messages) {
+      await sendTelegramMessage(context.env, context.message.chat.id, item.text || item, item.options || {});
+    }
+  } catch (error) {
+    console.log(JSON.stringify({ ok: false, job: "auto-select-notify", error: error.message }));
+    await sendTelegramMessage(
+      context.env,
+      context.message.chat.id,
+      `\u041d\u0435 \u0441\u043c\u043e\u0433 \u0434\u043e\u0432\u0435\u0441\u0442\u0438 \u0430\u0432\u0442\u043e\u043f\u043e\u0434\u0431\u043e\u0440 \u0434\u043e \u043a\u043e\u043d\u0446\u0430: ${error.message}`
+    );
+  }
+}
+
 async function runMonitoringForAutoPost(env) {
   const { runMonitoringCycle } = await import("./monitoring/index.js");
-  return runMonitoringCycle(env, {
+  const autoEnv = { ...env, MAX_DEMAND_TOPICS_PER_MONITORING_RUN: "1" };
+  return runMonitoringCycle(autoEnv, {
     cron: "manual",
     notify: false,
-    limit: Number(env.AUTO_SELECT_MONITORING_LIMIT || 12)
+    sourceTypes: ["rss"],
+    limit: Number(env.AUTO_SELECT_MONITORING_LIMIT || 4),
+    offset: 0
   });
 }
 
@@ -437,6 +463,7 @@ function looksLikeTextRevision(text) {
 function startsNewDraftRequest(text) {
   const lower = String(text || "").toLowerCase();
   return hasAny(lower, [
+    "\u0437\u0430\u043c\u0443\u0442\u0438",
     "\u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432",
     "\u0441\u0433\u0435\u043d\u0435\u0440",
     "\u0441\u043e\u0437\u0434\u0430\u0439 \u043f\u043e\u0441\u0442",
@@ -513,8 +540,9 @@ function looksLikeGenericPostRequest(text, topic) {
 }
 
 function shouldAutoSelectForDraftRequest(text, topic) {
-  const cleanTopic = String(topic || "").trim();
+  const cleanTopic = String(topic || "").trim().toLowerCase();
   if (looksLikeMonitoringArticleRequest(text)) return true;
+  if (["auto_select", "autoselect", "choose", "choose yourself", "self", "\u0432\u044b\u0431\u0435\u0440\u0438 \u0441\u0430\u043c"].includes(cleanTopic)) return true;
   if (isOnlyPostAndPlatformRequestFixed(String(text || "").toLowerCase())) return true;
   if (!cleanTopic && (startsNewDraftRequest(text) || mentionsPlatform(text))) return true;
   return false;
@@ -523,6 +551,7 @@ function shouldAutoSelectForDraftRequest(text, topic) {
 function isOnlyPostAndPlatformRequestFixed(lower) {
   const remainder = String(lower || "")
     .replace(/\u0432\u043b\u0430\u0434\u0438\u043c\u0438\u0440/g, " ")
+    .replace(/\u0437\u0430\u043c\u0443\u0442\u0438/g, " ")
     .replace(/\u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u044c|\u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u0438\u0442\u044c|\u0441\u0434\u0435\u043b\u0430\u0439|\u0441\u043e\u0437\u0434\u0430\u0439|\u043d\u0430\u043f\u0438\u0448\u0438|\u0441\u043e\u0441\u0442\u0430\u0432\u044c|\u0434\u0435\u043b\u0430\u0439/g, " ")
     .replace(/\u043f\u043e\u0441\u0442|\u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438[ея]|\u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446(?:\u0438\u044e|\u0438\u044f|\u0438\u0438)?|\u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b/g, " ")
     .replace(/\u0434\u043b\u044f|\u0432|\u043d\u0430/g, " ")

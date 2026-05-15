@@ -149,7 +149,8 @@ function filterSources(sources, event = {}, env = {}) {
     ? Number(env.MAX_SOURCES_PER_MONITORING_RUN || 25)
     : 0;
   const limit = requestedLimit || scheduledLimit;
-  const offset = Number(event.offset || 0) || scheduledOffset(event, sources.length, limit);
+  const hasExplicitOffset = Object.prototype.hasOwnProperty.call(event, "offset");
+  const offset = hasExplicitOffset ? Number(event.offset || 0) : scheduledOffset(event, sources.length, limit);
   const filtered = allowedTypes
     ? sources.filter((source) => allowedTypes.has(source.type))
     : prioritizeSources(sources);
