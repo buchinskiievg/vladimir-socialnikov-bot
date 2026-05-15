@@ -6,7 +6,7 @@ import { fetchGoogleNewsItems } from "./google-news.js";
 import { enrichItem } from "./thread-scanner.js";
 import { insertScanRun } from "../storage/scan-runs.js";
 import { createDraftsFromDemand } from "../workflows/demand.js";
-import { ensureDraftSourceLine, sourceUrlFromDraft } from "../workflows/drafts.js";
+import { ensureDraftSourceLine } from "../workflows/drafts.js";
 import { sendTelegramMessage } from "../telegram-api.js";
 import {
   firstSentenceFromItem,
@@ -231,14 +231,11 @@ function formatDraft(draft) {
 }
 
 function formatApprovalHeader(draft) {
-  const lines = [
+  return [
     "FOR APPROVAL",
     `Channel: ${formatTargetLabel(draft.target)}`,
     `Account: ${formatAccountLabel(draft.target)}`
-  ];
-  const sourceUrl = sourceUrlFromDraft(draft);
-  if (sourceUrl) lines.push(`Source: ${sourceUrl}`);
-  return lines.join("\n");
+  ].join("\n");
 }
 
 function formatTargetLabel(target) {

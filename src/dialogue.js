@@ -1,5 +1,5 @@
 import { generateClarifyingQuestion, generateDialogueReply, parseDialogueTurn } from "./ai/gemini.js";
-import { cleanupPendingDrafts, createDraftFromTopic, ensureDraftSourceLine, listPendingDrafts, regenerateDraftImage, reviseDraft, sourceUrlFromDraft } from "./workflows/drafts.js";
+import { cleanupPendingDrafts, createDraftFromTopic, ensureDraftSourceLine, listPendingDrafts, regenerateDraftImage, reviseDraft } from "./workflows/drafts.js";
 import { buildRedditDiscoveryMessages, discoverRedditCommunities } from "./workflows/reddit-discovery.js";
 import {
   appendChatMessage,
@@ -543,14 +543,11 @@ function formatImageUpdates(drafts) {
 }
 
 function formatApprovalHeader(draft) {
-  const lines = [
+  return [
     "FOR APPROVAL",
     `Channel: ${formatTargetLabel(draft.target)}`,
     `Account: ${formatAccountLabel(draft.target)}`
-  ];
-  const sourceUrl = sourceUrlFromDraft(draft);
-  if (sourceUrl) lines.push(`Source: ${sourceUrl}`);
-  return lines.join("\n");
+  ].join("\n");
 }
 
 function formatTargetLabel(target) {
