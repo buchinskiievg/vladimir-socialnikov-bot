@@ -2,6 +2,7 @@ import { generateClarifyingQuestion, generateDialogueReply, parseDialogueTurn } 
 import { cleanupPendingDrafts, createDraftFromTopic, ensureDraftSourceLine, listPendingDrafts, regenerateDraftImage, reviseDraft } from "./workflows/drafts.js";
 import { buildRedditDiscoveryMessages, discoverRedditCommunities } from "./workflows/reddit-discovery.js";
 import { sendTelegramMessage } from "./telegram-api.js";
+import { readBestMaterialFinding } from "./storage/material-findings.js";
 import {
   appendChatMessage,
   archiveMessageToSlowMemory,
@@ -334,52 +335,41 @@ async function handleAutoSelectedTopic(context) {
   }
 
   const monitoringResult = await runMonitoringForAutoPost(env);
-  if (monitoringResult.drafts?.length) {
-    await rememberDrafts(env, fastMemory, context.message.chat.id, monitoringResult.drafts);
-    return formatDrafts(monitoringResult.drafts);
-  }
-
-  const cachedFinding = await readRecentRememberedFinding(env);
-  if (cachedFinding?.url) {
-    const targets = normalizeTargets(fastMemory.pendingTargets?.length ? fastMemory.pendingTargets : ["linkedin_personal"]);
-    const drafts = [];
-    for (const target of targets) {
-      drafts.push(await createDraftFromTopic(cachedFinding.title, {
-        ...context,
-        target,
-        finding: {
-          title: cachedFinding.title,
-          excerpt: cachedFinding.title,
-          url: cachedFinding.url
-        }
-      }));
-    }
-    await rememberDrafts(env, fastMemory, context.message.chat.id, drafts);
-    return formatDrafts(drafts);
-  }
+  const bestFinding = await readBestMaterialFinding(env, { sinceIso: daysAgoIso(14) });
+  if (bestFinding?.url) return await createDraftsFromBestFinding(bestFinding, context, fastMemory);
 
   return "\u041d\u0435 \u043d\u0430\u0448\u0435\u043b \u0441\u0432\u0435\u0436\u0438\u0439 \u0441\u0438\u043b\u044c\u043d\u044b\u0439 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b \u0438\u0437 \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433\u0430 \u0441 URL-\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u043e\u043c. \u041c\u043e\u0436\u0435\u0448\u044c \u0434\u0430\u0442\u044c \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u0443\u044e \u0441\u0441\u044b\u043b\u043a\u0443 \u0438\u043b\u0438 \u0442\u0435\u043c\u0443.";
 }
 
-async function readRecentRememberedFinding(env) {
-  if (!env.DB) return null;
-  const row = await env.DB.prepare(
-    "select raw_sentence, source_url from finding_sentence_memory where source_url like 'http%' order by first_seen_at desc limit 1"
-  ).first();
-  if (!row?.source_url) return null;
-  return {
-    title: cleanCachedFindingTitle(row.raw_sentence || "Recent power engineering material"),
-    url: row.source_url
-  };
+async function createDraftsFromBestFinding(bestFinding, context, fastMemory) {
+  const targets = normalizeTargets(fastMemory.pendingTargets?.length ? fastMemory.pendingTargets : ["linkedin_personal"]);
+  const drafts = [];
+  for (const target of targets) {
+    drafts.push(await createDraftFromTopic(bestFinding.title, {
+      ...context,
+      target,
+      finding: {
+        title: bestFinding.title,
+        excerpt: buildBestFindingExcerpt(bestFinding),
+        url: bestFinding.url
+      }
+    }));
+  }
+  await rememberDrafts(context.env, fastMemory, context.message.chat.id, drafts);
+  return formatDrafts(drafts);
 }
 
-function cleanCachedFindingTitle(value) {
-  return String(value || "")
-    .replace(/&#8217;/g, "'")
-    .replace(/&#038;/g, "&")
-    .replace(/\s+/g, " ")
-    .replace(/[.。]+$/g, "")
-    .trim();
+function buildBestFindingExcerpt(finding) {
+  return [
+    finding.excerpt || finding.title,
+    "",
+    `Selection score: ${finding.score}`,
+    finding.scoring?.components ? `Score components: ${JSON.stringify(finding.scoring.components)}` : ""
+  ].filter(Boolean).join("\n").trim();
+}
+
+function daysAgoIso(days) {
+  return new Date(Date.now() - Number(days || 0) * 24 * 60 * 60 * 1000).toISOString();
 }
 
 async function runAutoSelectedTopicAndNotify(context) {
@@ -401,7 +391,7 @@ async function runAutoSelectedTopicAndNotify(context) {
 
 async function runMonitoringForAutoPost(env) {
   const { runMonitoringCycle } = await import("./monitoring/index.js");
-  const autoEnv = { ...env, MAX_DEMAND_TOPICS_PER_MONITORING_RUN: "1" };
+  const autoEnv = { ...env, MAX_DEMAND_TOPICS_PER_MONITORING_RUN: "0", MAX_DRAFTS_PER_MONITORING_RUN: "0" };
   return runMonitoringCycle(autoEnv, {
     cron: "manual",
     notify: false,

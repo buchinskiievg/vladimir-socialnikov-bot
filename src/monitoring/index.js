@@ -5,6 +5,7 @@ import { fetchHtmlItems } from "./html-list.js";
 import { fetchGoogleNewsItems } from "./google-news.js";
 import { enrichItem } from "./thread-scanner.js";
 import { insertScanRun } from "../storage/scan-runs.js";
+import { upsertMaterialFinding } from "../storage/material-findings.js";
 import { createDraftsFromDemand } from "../workflows/demand.js";
 import { ensureDraftSourceLine } from "../workflows/drafts.js";
 import { sendTelegramMessage } from "../telegram-api.js";
@@ -51,6 +52,19 @@ export async function runMonitoringCycle(env, event) {
         const keywordScore = scoreItem(item, source.topic);
         const score = scoring.total;
         if (score >= Number(env.MIN_MATERIAL_SCORE || 45) || keywordScore >= 2) {
+          await upsertMaterialFinding(env, {
+            url: item.url || source.url,
+            title: item.title || firstSentenceFromItem(item),
+            excerpt: item.excerpt || item.fullText || item.commentsText || "",
+            sourceId: source.id,
+            sourceName: source.name,
+            sourceType: source.type,
+            topic: source.topic,
+            score,
+            scoring,
+            publishedAt: item.publishedAt || "",
+            seenAt: startedAt
+          });
           const sentence = firstSentenceFromItem(item);
           const normalizedKey = normalizeSentence(sentence);
           if (await hasFindingSentence(env, normalizedKey)) continue;

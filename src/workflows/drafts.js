@@ -1,5 +1,6 @@
 import { publishToSocials } from "../social/index.js";
 import { isDryRun } from "../social/shared.js";
+import { markMaterialFindingUsed } from "../storage/material-findings.js";
 import { rememberPublishedPost } from "../storage/published-history.js";
 import {
   insertDraft,
@@ -135,6 +136,7 @@ export async function approveDraft(id, context) {
   const dryRun = isDryRun(context.env) && publishResult.dryRun;
   await updateDraftStatus(context.env, id, publishResult.ok ? (dryRun ? "approved_dry_run" : "published") : "publish_failed");
   if (publishResult.ok && !dryRun) {
+    if (draft.source && draft.source !== "telegram") await markMaterialFindingUsed(context.env, draft.source);
     await rememberPublishedPost(context.env, {
       draftId: draft.id,
       target: draft.target || "all",
