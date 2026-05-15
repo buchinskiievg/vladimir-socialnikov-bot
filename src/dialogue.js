@@ -130,6 +130,9 @@ async function executeDialogueTurn(turn, context) {
   }
 
   if (turn.intent === "auto_select_topic") {
+    if (!shouldHonorAutoSelectIntent(context.message.text, fastMemory)) {
+      return await buildBrainReply(context, turn.reply || "");
+    }
     const targets = overrideTargetsFromText(context.message.text, normalizeTargets(turn.targets));
     return await handleAutoSelectedTopic({ ...context, fastMemory: { ...fastMemory, pendingTargets: targets } });
   }
@@ -188,7 +191,18 @@ async function buildBrainReply(context, parsedReply) {
       console.log(JSON.stringify({ ok: false, job: "dialogue-brain", error: error.message }));
     }
   }
-  return parsedReply || REPLY_GEMINI_DOWN || REPLY_GENERIC;
+  return parsedReply || buildLocalChatReply(context.message.text || "") || REPLY_GEMINI_DOWN || REPLY_GENERIC;
+}
+
+function buildLocalChatReply(text) {
+  const lower = String(text || "").toLowerCase();
+  if (lower.includes("\u043f\u043e\u0438\u0441\u043a") && hasAny(lower, ["\u0442\u044b \u0436\u0435", "\u0441\u0430\u043c", "\u0432\u044b\u043f\u043e\u043b\u043d"])) {
+    return "\u0414\u0430, \u043f\u043e\u0438\u0441\u043a \u0443\u0436\u0435 \u0437\u0430\u043f\u0443\u0441\u043a\u0430\u043b\u0441\u044f. \u0415\u0441\u043b\u0438 \u043f\u043e\u0441\u0442 \u043d\u0435 \u043f\u0440\u0438\u0448\u0435\u043b, \u0437\u043d\u0430\u0447\u0438\u0442 \u0432 \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0435\u043c \u043f\u0440\u043e\u0433\u043e\u043d\u0435 \u043d\u043e\u0432\u044b\u0435 RSS-\u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b \u043d\u0435 \u043f\u0440\u043e\u0448\u043b\u0438 \u0444\u0438\u043b\u044c\u0442\u0440 \u0446\u0435\u043d\u043d\u043e\u0441\u0442\u0438 \u0438\u043b\u0438 \u0443\u0436\u0435 \u0431\u044b\u043b\u0438 \u043f\u043e\u043c\u0435\u0447\u0435\u043d\u044b \u043a\u0430\u043a \u0440\u0430\u0437\u043e\u0431\u0440\u0430\u043d\u043d\u044b\u0435. \u041c\u043e\u0433\u0443 \u0432\u0437\u044f\u0442\u044c \u043b\u0443\u0447\u0448\u0438\u0439 \u0438\u0437 \u0443\u0436\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043d\u044b\u0445 \u0441\u0435\u0433\u043e\u0434\u043d\u044f \u0438\u043b\u0438 \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0431\u043e\u043b\u0435\u0435 \u0448\u0438\u0440\u043e\u043a\u0438\u0439 \u043f\u043e\u0438\u0441\u043a.";
+  }
+  if (hasAny(lower, ["\u043d\u0435 \u043e\u0442\u0432\u0435\u0442", "\u043c\u043e\u043b\u0447", "\u043d\u0438\u0447\u0435\u0433\u043e", "\u043d\u0435 \u043f\u0440\u0438\u0448"])) {
+    return "\u0412\u0438\u0436\u0443 \u043f\u0440\u043e\u0431\u043b\u0435\u043c\u0443. \u042f \u0434\u043e\u043b\u0436\u0435\u043d \u0441\u0440\u0430\u0437\u0443 \u0434\u0430\u0432\u0430\u0442\u044c \u043e\u0442\u043a\u043b\u0438\u043a, \u0430 \u0435\u0441\u043b\u0438 \u043f\u043e\u0441\u0442 \u043d\u0435 \u0441\u043e\u0431\u0440\u0430\u043b\u0441\u044f, \u043e\u0431\u044a\u044f\u0441\u043d\u044f\u0442\u044c \u043f\u0440\u0438\u0447\u0438\u043d\u0443, \u0430 \u043d\u0435 \u043c\u043e\u043b\u0447\u0430\u0442\u044c.";
+  }
+  return "";
 }
 
 async function buildClarifyingReply(context, missing) {
@@ -546,6 +560,13 @@ function shouldAutoSelectForDraftRequest(text, topic) {
   if (isOnlyPostAndPlatformRequestFixed(String(text || "").toLowerCase())) return true;
   if (!cleanTopic && (startsNewDraftRequest(text) || mentionsPlatform(text))) return true;
   return false;
+}
+
+function shouldHonorAutoSelectIntent(text, fastMemory) {
+  if (fastMemory?.pendingIntent === "create_drafts") return true;
+  return startsNewDraftRequest(text)
+    || looksLikeMonitoringArticleRequest(text)
+    || (mentionsPlatform(text) && hasAny(String(text || "").toLowerCase(), ["post", "draft", "article", "material", "\u043f\u043e\u0441\u0442", "\u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446", "\u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b", "\u0441\u0442\u0430\u0442"]));
 }
 
 function isOnlyPostAndPlatformRequestFixed(lower) {
