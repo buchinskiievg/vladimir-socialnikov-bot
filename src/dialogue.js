@@ -339,7 +339,47 @@ async function handleAutoSelectedTopic(context) {
     return formatDrafts(monitoringResult.drafts);
   }
 
+  const cachedFinding = await readRecentRememberedFinding(env);
+  if (cachedFinding?.url) {
+    const targets = normalizeTargets(fastMemory.pendingTargets?.length ? fastMemory.pendingTargets : ["linkedin_personal"]);
+    const drafts = [];
+    for (const target of targets) {
+      drafts.push(await createDraftFromTopic(cachedFinding.title, {
+        ...context,
+        target,
+        finding: {
+          title: cachedFinding.title,
+          excerpt: cachedFinding.title,
+          url: cachedFinding.url
+        }
+      }));
+    }
+    await rememberDrafts(env, fastMemory, context.message.chat.id, drafts);
+    return formatDrafts(drafts);
+  }
+
   return "\u041d\u0435 \u043d\u0430\u0448\u0435\u043b \u0441\u0432\u0435\u0436\u0438\u0439 \u0441\u0438\u043b\u044c\u043d\u044b\u0439 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b \u0438\u0437 \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433\u0430 \u0441 URL-\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u043e\u043c. \u041c\u043e\u0436\u0435\u0448\u044c \u0434\u0430\u0442\u044c \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u0443\u044e \u0441\u0441\u044b\u043b\u043a\u0443 \u0438\u043b\u0438 \u0442\u0435\u043c\u0443.";
+}
+
+async function readRecentRememberedFinding(env) {
+  if (!env.DB) return null;
+  const row = await env.DB.prepare(
+    "select raw_sentence, source_url from finding_sentence_memory where source_url like 'http%' order by first_seen_at desc limit 1"
+  ).first();
+  if (!row?.source_url) return null;
+  return {
+    title: cleanCachedFindingTitle(row.raw_sentence || "Recent power engineering material"),
+    url: row.source_url
+  };
+}
+
+function cleanCachedFindingTitle(value) {
+  return String(value || "")
+    .replace(/&#8217;/g, "'")
+    .replace(/&#038;/g, "&")
+    .replace(/\s+/g, " ")
+    .replace(/[.。]+$/g, "")
+    .trim();
 }
 
 async function runAutoSelectedTopicAndNotify(context) {

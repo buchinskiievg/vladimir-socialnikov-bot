@@ -105,7 +105,7 @@ function sanitizeSourceBasedPost(text, { topic, target } = {}) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   if (/^The article points to\b/i.test(result)) {
-    result = `${openingHookForTopic(topic, target)}\n\n${stripFirstParagraph(result)}`;
+    result = result.replace(/^The article points to[^.\n]*[.\n]\s*/i, `${openingHookForTopic(topic, target)}\n\n`);
   }
   return result.trim();
 }
@@ -121,7 +121,7 @@ function ensureSourceLine(text, finding) {
 function ensurePlatformLength(text, { topic, target, sourceBased = false }) {
   const minimum = minCharsForTarget(target);
   if (!minimum || text.length >= minimum || text.includes("Gemini post generation failed")) return text;
-  if (sourceBased) return text;
+  if (sourceBased) return `${text.trim()}\n${sourceBasedExpansion(topic, target)}`.trim();
 
   const needsLinkedIn = target === "linkedin_company" || target === "linkedin_personal";
   if (!needsLinkedIn) return text;
@@ -143,6 +143,23 @@ function ensurePlatformLength(text, { topic, target, sourceBased = false }) {
   ].join("\n");
 
   return `${text.trim()}\n${addition}`;
+}
+
+function sourceBasedExpansion(topic, target) {
+  if (target !== "linkedin_company" && target !== "linkedin_personal") return "";
+  const cleanTopic = cleanPostTopic(topic);
+  return [
+    "",
+    "The useful engineering discussion is not the headline alone, but the checks it triggers before a similar project can be trusted in operation:",
+    "",
+    "* Grid connection: available capacity, fault levels, voltage regulation, reactive power range, and grid-code compliance.",
+    "* Equipment selection: transformers, MV/HV switchgear, protection devices, converters, auxiliary systems, and thermal limits.",
+    "* Studies and settings: load flow, short-circuit, harmonics, dynamic behaviour, protection coordination, and control philosophy.",
+    "* Commissioning: SCADA/EMS signals, interlocks, trip logic, test records, energization sequence, and acceptance criteria.",
+    "* Project risk: permitting, supply chain, maintainability, documentation quality, and operator readiness.",
+    "",
+    `For engineers looking at ${cleanTopic}, the practical question is simple: what has to be verified before the announcement becomes a reliable asset?`
+  ].join("\n");
 }
 
 function polishPostStart(text, { topic, target }) {
@@ -758,7 +775,7 @@ function fallbackDraft(topic, finding, _reason, target = "all") {
   const sourceBased = Boolean(finding?.url);
   const fallback = genericEngineeringPost(cleanTopic, sourceLine, target, sourceBased);
   return sourceBased
-    ? sanitizeSourceBasedPost(fallback)
+    ? sanitizeSourceBasedPost(ensurePlatformLength(fallback, { topic: cleanTopic, target, sourceBased: true }), { topic: cleanTopic, target })
     : polishPostStart(ensurePlatformLength(fallback, { topic: cleanTopic, target }), { topic: cleanTopic, target });
 }
 
