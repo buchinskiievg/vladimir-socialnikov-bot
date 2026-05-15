@@ -99,7 +99,7 @@ async function executeDialogueTurn(turn, context) {
 
   if (shouldShowMaterialChoicesForManualPost(rawText)) {
     const targets = overrideTargetsFromText(rawText, normalizeTargets(turn.targets || fastMemory.pendingTargets || ["linkedin_personal"]));
-    return await handleAutoSelectedTopic({ ...context, fastMemory: { ...fastMemory, pendingTargets: targets }, chatId });
+    return await handleExistingMaterialChoices({ ...context, fastMemory: { ...fastMemory, pendingTargets: targets }, chatId });
   }
 
   if (fastMemory.pendingIntent === "select_material_for_draft") {
@@ -345,6 +345,12 @@ async function handleAutoSelectedTopic(context) {
   if (findings.length) return await rememberAndFormatMaterialChoices(findings, context, context.fastMemory);
 
   return "\u041d\u0435 \u043d\u0430\u0448\u0435\u043b \u0441\u0432\u0435\u0436\u0438\u0439 \u0441\u0438\u043b\u044c\u043d\u044b\u0439 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b \u0438\u0437 \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433\u0430 \u0441 URL-\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u043e\u043c. \u041c\u043e\u0436\u0435\u0448\u044c \u0434\u0430\u0442\u044c \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u0443\u044e \u0441\u0441\u044b\u043b\u043a\u0443 \u0438\u043b\u0438 \u0442\u0435\u043c\u0443.";
+}
+
+async function handleExistingMaterialChoices(context) {
+  const findings = await readTopMaterialFindings(context.env, { sinceIso: daysAgoIso(14), limit: 5 });
+  if (findings.length) return await rememberAndFormatMaterialChoices(findings, context, context.fastMemory);
+  return "\u041f\u043e\u043a\u0430 \u043d\u0435 \u0432\u0438\u0436\u0443 5 \u0441\u0432\u0435\u0436\u0438\u0445 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u043e\u0432 \u0432 \u0431\u0430\u0437\u0435. \u041c\u043e\u0436\u0435\u0448\u044c \u0434\u0430\u0442\u044c \u0441\u0432\u043e\u044e \u0442\u0435\u043c\u0443, \u0438\u043b\u0438 \u044f \u0437\u0430\u043f\u0443\u0449\u0443 \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433 \u0438 \u043f\u043e\u0434\u0431\u0435\u0440\u0443 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b.";
 }
 
 async function handleMaterialSelection(text, context) {
